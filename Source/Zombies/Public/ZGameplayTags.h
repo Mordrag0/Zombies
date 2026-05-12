@@ -1,0 +1,34 @@
+﻿// Copyright 2026 Luka Markuš. All rights reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "NativeGameplayTags.h"
+
+namespace ZGameplayTags
+{
+    ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event)
+    ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(NPC)
+    ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Dialogue)
+    ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Repeatable)
+    ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Waypoint)
+    ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Path)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Combat_TargetSet)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Combat_TargetCleared)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Time_HourChanged)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Weapon_OutOfAmmo)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Item_EquipComplete)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Dialogue_TargetSet)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Dialogue_TargetCleared)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Dialogue_SpottedCriminalSet)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Dialogue_SpottedCriminalCleared)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Dialogue_PendingTargetSet)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Dialogue_PendingTargetCleared)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Path_Started)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Path_Ended)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Activity_DesiredActivityChanged)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_TeleportSucceeded)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_TeleportFailed)
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_HomeTransformChanged)
+};
+
