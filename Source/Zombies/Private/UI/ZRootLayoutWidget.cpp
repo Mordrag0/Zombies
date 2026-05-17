@@ -2,6 +2,7 @@
 
 
 #include "UI/ZRootLayoutWidget.h"
+#include "Settings/ZGameUserSettings.h"
 #include "UI/ZActivatableWidgetStack.h"
 #include "UI/ZCompassWidget.h"
 #include "UI/ZNotificationManagerWidget.h"

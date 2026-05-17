@@ -41,6 +41,10 @@ void FZombiesEditorModule::ShutdownModule()
 
 void FZombiesEditorModule::OnPackageSaved(const FString& PackageFileName, UPackage* Package, FObjectPostSaveContext ObjectSaveContext)
 {
+	if (ObjectSaveContext.IsProceduralSave() || ObjectSaveContext.IsCooking())
+	{
+		return;
+	}
 	const FAssetRegistryModule& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 
 	// Find all State Trees that reference the saved package

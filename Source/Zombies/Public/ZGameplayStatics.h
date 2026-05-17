@@ -32,4 +32,10 @@ public:
 	static EZMovementMode GetMovementMode(const FName& Name);
 	
 	static const FText& GetFactionText(EZFaction Faction);
+	
+	static bool HasAnyExact(const TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container);
+	static bool HasAllExact(const TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container);
+	static FGameplayTagContainer FilterExact(const TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container);
+	static void RemoveAll(TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container);
+	static void Append(TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container);
 };

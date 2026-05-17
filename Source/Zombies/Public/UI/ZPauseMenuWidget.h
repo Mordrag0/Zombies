@@ -23,6 +23,9 @@ protected:
 
 	UFUNCTION()
 	void Resume();
+	
+	UFUNCTION()
+	void Restart();
 
 	UFUNCTION()
 	void Save();
@@ -38,6 +41,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UZButton> ResumeButton;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UZButton> RestartButton;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UZButton> SaveButton;

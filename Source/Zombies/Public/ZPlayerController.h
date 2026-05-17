@@ -79,6 +79,7 @@ class ZOMBIES_API AZPlayerController : public APlayerController, public IGeneric
 public:
 	AZPlayerController();
 
+	void SetHUDWidget(UZHUDWidget* InHUDWidget);
 	UZHUDWidget* GetHUDWidget() const { return HUDWidget; }
 
 	void ToggleInventory();
@@ -175,30 +176,6 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void Server_Reliable_UnlockLockpickTarget(AZLockableBase* LockpickTarget);
-
-	UFUNCTION(Exec)
-	void SaveGame(const FString& SlotName = TEXT("Main"));
-
-	UFUNCTION(Exec)
-	void LoadGame(const FString& SlotName = TEXT("Main"));
-
-#if WITH_EDITOR || UE_BUILD_DEVELOPMENT
-
-	UFUNCTION(Exec)
-	void Slomo(float Value);
-
-	UFUNCTION(Exec)
-	void SetTimeOfDay(float Time);
-
-	UFUNCTION(Exec)
-	void FreeXP(int32 XP);
-
-	UFUNCTION(Exec)
-	void SetVolume(float Volume);
-	
-	UFUNCTION(Exec)
-	void ChangeReputation(int32 Faction, float ReputationChange);
-#endif
 
 	bool IsLockpicking() const { return PlayerActivity == EZPlayerActivity::Lockpicking; }
 	

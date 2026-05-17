@@ -3,6 +3,7 @@
 
 #include "UI/ZPauseMenuWidget.h"
 #include "ZPlayerController.h"
+#include "Kismet/GameplayStatics.h"
 #include "SaveLoad/ZSaveSubsystem.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "UI/Options/ZOptionsWidget.h"
@@ -14,15 +15,27 @@ void UZPauseMenuWidget::NativeOnInitialized()
 	Super::NativeOnInitialized();
 
 	ResumeButton->OnClicked().AddUObject(this, &ThisClass::Resume);
+	RestartButton->OnClicked().AddUObject(this, &ThisClass::Restart);
 	SaveButton->OnClicked().AddUObject(this, &ThisClass::Save);
 	LoadButton->OnClicked().AddUObject(this, &ThisClass::Load);
 	OptionsButton->OnClicked().AddUObject(this, &ThisClass::ShowOptions);
 	QuitButton->OnClicked().AddUObject(this, &ThisClass::Quit);
+	
+#if WITH_EDITOR
+	RestartButton->SetVisibility(ESlateVisibility::Visible);
+#else
+	RestartButton->SetVisibility(ESlateVisibility::Collapsed);
+#endif
 }
 
 void UZPauseMenuWidget::Resume()
 {
 	RemoveFromStack();
+}
+
+void UZPauseMenuWidget::Restart()
+{
+	UGameplayStatics::OpenLevel(this, FName(*GetWorld()->GetName()));
 }
 
 void UZPauseMenuWidget::Save()

@@ -5,6 +5,7 @@
 
 #include "DataTableEditorUtils.h"
 #include "Editor.h"
+#include "EngineStats.h"
 #include "FileHelpers.h"
 #include "GameplayTagsEditorModule.h"
 #include "ZEventEditorSettings.h"
@@ -44,6 +45,8 @@ FText GetEventTypeText(EZEventType EventType)
 		return ZEditorText::RegularEvent;
 	case EZEventType::Dialogue:
 		return ZEditorText::DialogueEvent;
+	case EZEventType::Timed:
+		return ZEditorText::TimedEvent;
 	case EZEventType::Simple:
 	default:
 		return ZEditorText::SimpleEvent;
@@ -67,20 +70,9 @@ TSharedPtr<FGameplayTagNode> GetNextNode(FGameplayTag Tag, FGameplayTag Parent)
 void FZNewEvent::Reset()
 {
 	RootTag = FGameplayTag::EmptyTag;
-	Table = FZEventDataTable();
-}
-
-FZEventDataTable::FZEventDataTable()
-{
-	EventTable = nullptr;
+	TagName = FText::GetEmpty();
 	Type = EZEventType::Simple;
-}
-
-FZEventDataTable::FZEventDataTable(UDataTable* InEventTable, EZEventType InType, const FGameplayTagContainer& InEvents)
-{
-	EventTable = InEventTable;
-	Type = InType;
-	Events = InEvents;
+	DataTable = nullptr;
 }
 
 SZEventEditor::SZEventEditor()
@@ -105,34 +97,43 @@ SZEventEditor::SZEventEditor()
 	
 	NewEventRootTag = ZGameplayTags::Event;
 	
+	for (int32 Idx = 0; Idx < static_cast<uint8>(EZEventType::MAX); ++Idx)
+	{
+		EventTypes.Emplace(static_cast<EZEventType>(Idx));
+	}
+	
 	ConditionData =
 	{
-		{ FZEventCondition_Inventory::StaticStruct(), ZEditorText::Inventory, [this](TSharedPtr<FInstancedStruct> Struct)
+		{ FZEventCondition_Inventory::StaticStruct(), ZEditorText::Condition_Inventory, [this](TSharedPtr<FInstancedStruct> Struct)
 			{ return BuildEditableEventInventoryConditionWidget(Struct); }},
-		{ FZEventCondition_Reputation::StaticStruct(), ZEditorText::Reputation, [this](TSharedPtr<FInstancedStruct> Struct)
-				{ return BuildEditableEventReputationConditionWidget(Struct); }},
-		{ FZEventCondition_Skill::StaticStruct(), ZEditorText::Skill, [this](TSharedPtr<FInstancedStruct> Struct)
-				{ return BuildEditableEventSkillConditionWidget(Struct); }},
+		{ FZEventCondition_Reputation::StaticStruct(), ZEditorText::Condition_Reputation, [this](TSharedPtr<FInstancedStruct> Struct)
+			{ return BuildEditableEventReputationConditionWidget(Struct); }},
+		{ FZEventCondition_Skill::StaticStruct(), ZEditorText::Condition_Skill, [this](TSharedPtr<FInstancedStruct> Struct)
+			{ return BuildEditableEventSkillConditionWidget(Struct); }},
 	};
 	ReactionData = 
 	{
-		{ FZEventReaction_ReceiveItem::StaticStruct(), ZEditorText::ReceiveItem, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
-			{return BuildEditableEventReactionWidget_ReceiveItem(Struct, Type); }},
-		{ FZEventReaction_GiveItem::StaticStruct(), ZEditorText::GiveItem, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
-			{return BuildEditableEventReactionWidget_GiveItem(Struct, Type); }},
-		{ FZEventReaction_GainXP::StaticStruct(), ZEditorText::GainXP, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
-			{return BuildEditableEventReactionWidget_GainXP(Struct, Type); }},
-		{ FZEventReaction_Reputation::StaticStruct(), ZEditorText::Reputation, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
-			{return BuildEditableEventReactionWidget_Reputation(Struct, Type); }},
-		{ FZEventReaction_HomeTransform::StaticStruct(), ZEditorText::HomeTransform, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
-			{return BuildEditableEventReactionWidget_HomeTransform(Struct, Type); }},
-		{ FZEventReaction_StartPath::StaticStruct(), ZEditorText::StartPath, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
-			{return BuildEditableEventReactionWidget_StartPath(Struct, Type); }},
-		{ FZEventReaction_CancelPath::StaticStruct(), ZEditorText::CancelPath, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
-			{return BuildEditableEventReactionWidget_CancelPath(Struct, Type); }},
-		{ FZEventReaction_Attack::StaticStruct(), ZEditorText::Attack, nullptr },
-		{ FZEventReaction_TakeStolenItems::StaticStruct(), ZEditorText::TakeStolenItems, nullptr },
-		{ FZEventReaction_WarnAboutBreakingIn::StaticStruct(), ZEditorText::WarnAboutBreakingIn, nullptr },
+		{ FZEventReaction_ReceiveItem::StaticStruct(), ZEditorText::Reaction_ReceiveItem, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_ReceiveItem(Struct, Type); }},
+		{ FZEventReaction_GiveItem::StaticStruct(), ZEditorText::Reaction_GiveItem, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_GiveItem(Struct, Type); }},
+		{ FZEventReaction_GainXP::StaticStruct(), ZEditorText::Reaction_GainXP, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_GainXP(Struct, Type); }},
+		{ FZEventReaction_Reputation::StaticStruct(), ZEditorText::Condition_Reputation, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_Reputation(Struct, Type); }},
+		{ FZEventReaction_HomeTransform::StaticStruct(), ZEditorText::Reaction_HomeTransform, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_HomeTransform(Struct, Type); }},
+		{ FZEventReaction_StartPath::StaticStruct(), ZEditorText::Reaction_StartPath, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_StartPath(Struct, Type); }},
+		{ FZEventReaction_CancelPath::StaticStruct(), ZEditorText::Reaction_CancelPath, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_CancelPath(Struct, Type); }},
+		{ FZEventReaction_Attack::StaticStruct(), ZEditorText::Reaction_Attack, nullptr },
+		{ FZEventReaction_TakeStolenItems::StaticStruct(), ZEditorText::Reaction_TakeStolenItems, nullptr },
+		{ FZEventReaction_WarnAboutBreakingIn::StaticStruct(), ZEditorText::Reaction_WarnAboutBreakingIn, nullptr },
+		{ FZEventReaction_StartTimedEvent::StaticStruct(), ZEditorText::Reaction_StartTimedEvent, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_StartTimedEvent(Struct, Type); }},
+		{ FZEventReaction_SetCanTrade::StaticStruct(), ZEditorText::Reaction_SetCanTrade, [this](TSharedPtr<FInstancedStruct> Struct, EZEventReactionType Type)
+			{ return BuildEditableEventReactionWidget_SetCanTrade(Struct, Type); }},
 	};
 }
 
@@ -223,6 +224,20 @@ void SZEventEditor::Construct(const FArguments& InArgs)
 					.AutoHeight()
 					[
 						SNew(SExpandableArea)
+						.AreaTitle(LOCTEXT("TimedEvents", "Timed Events"))
+						.InitiallyCollapsed(false)
+						.BodyContent()
+						[
+							SAssignNew(TimedEventListView, SListView<TSharedPtr<FGameplayTag>>)
+							.ListItemsSource(&FilteredTimedEvents)
+							.OnGenerateRow(this, &SZEventEditor::OnGenerateEventRow)
+							.OnSelectionChanged(this, &SZEventEditor::OnEventSelectedFromList)
+						]
+					]
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					[
+						SNew(SExpandableArea)
 						.AreaTitle(LOCTEXT("SimpleEvents", "Simple Events"))
 						.InitiallyCollapsed(false)
 						.BodyContent()
@@ -250,55 +265,23 @@ void SZEventEditor::Construct(const FArguments& InArgs)
 				[
 					SNew(SHorizontalBox)
 					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					[
-						SAssignNew(InsertButton, SButton)
-						.Text(LOCTEXT("AddTag", "Add event tag"))
-						.OnClicked(this, &SZEventEditor::OnInsertEventTag)
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					[
-						SAssignNew(InsertButton, SButton)
-						.Text(LOCTEXT("AddEvent", "Add event"))
-						.OnClicked(this, &SZEventEditor::OnInsert)
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					[
-						SAssignNew(EditButton, SButton)
-						.Text(ZEditorText::Edit)
-						.OnClicked(this, &SZEventEditor::OnEdit)
-						.Visibility(EVisibility::Collapsed)
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					[
-						SAssignNew(RemoveButton, SButton)
-						.Text(ZEditorText::Remove)
-						.OnClicked(this, &SZEventEditor::RemoveEvent)
-						.Visibility(EVisibility::Collapsed)
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					[
-						SAssignNew(RevertButton, SButton)
-						.Text(ZEditorText::Revert)
-						.OnClicked(this, &SZEventEditor::OnRevert)
-						.Visibility(EVisibility::Collapsed)
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					[
-						SAssignNew(SaveButton, SButton)
-						.Text(ZEditorText::Save)
-						.OnClicked(this, &SZEventEditor::Save)
-						.Visibility(EVisibility::Collapsed)
-					]
-					+ SHorizontalBox::Slot()
 					.FillWidth(1.f)
 					[
 						SNullWidget::NullWidget
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SNew(SButton)
+						.Text(LOCTEXT("RemoveTags", "Remove tags"))
+						.OnClicked_Lambda([this]()
+						{
+							FMenuBuilder MenuBuilder(true, nullptr);
+							MenuBuilder.AddWidget(BuildRemoveTagsWidget(), FText::GetEmpty());
+						
+							ShowPopupMenu(MenuBuilder);
+							return FReply::Handled();
+						})
 					]
 					+ SHorizontalBox::Slot()
 					.AutoWidth()
@@ -351,6 +334,57 @@ void SZEventEditor::Construct(const FArguments& InArgs)
 							SNew(SImage)
 							.Image(FAppStyle::GetBrush("Icons.Settings"))
 						]
+					]
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SNew(SHorizontalBox)
+					// + SHorizontalBox::Slot()
+					// .AutoWidth()
+					// [
+					// 	SAssignNew(InsertButton, SButton)
+					// 	.Text(LOCTEXT("AddTag", "Add event tag"))
+					// 	.OnClicked(this, &SZEventEditor::OnInsertEventTag)
+					// ]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SAssignNew(InsertButton, SButton)
+						.Text(LOCTEXT("AddEvent", "Add event"))
+						.OnClicked(this, &SZEventEditor::OnInsert)
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SAssignNew(EditButton, SButton)
+						.Text(ZEditorText::Edit)
+						.OnClicked(this, &SZEventEditor::OnEdit)
+						.Visibility(EVisibility::Collapsed)
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SAssignNew(RemoveButton, SButton)
+						.Text(ZEditorText::Remove)
+						.OnClicked(this, &SZEventEditor::RemoveEvent)
+						.Visibility(EVisibility::Collapsed)
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SAssignNew(RevertButton, SButton)
+						.Text(ZEditorText::Revert)
+						.OnClicked(this, &SZEventEditor::OnRevert)
+						.Visibility(EVisibility::Collapsed)
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SAssignNew(SaveButton, SButton)
+						.Text(ZEditorText::Save)
+						.OnClicked(this, &SZEventEditor::Save)
+						.Visibility(EVisibility::Collapsed)
 					]
 				]
 				+ SVerticalBox::Slot()
@@ -444,6 +478,12 @@ void SZEventEditor::UpdateListSelection()
 			return Item.IsValid() && *Item == CurrentEvent;
 		});
 	SimpleEventListView->SetSelection(FoundSimpleEvent ? *FoundSimpleEvent : nullptr, ESelectInfo::Direct);
+	TSharedPtr<FGameplayTag>* FoundTimedEvent = FilteredTimedEvents.FindByPredicate(
+		[this](const TSharedPtr<FGameplayTag>& Item)
+		{
+			return Item.IsValid() && *Item == CurrentEvent;
+		});
+	TimedEventListView->SetSelection(FoundTimedEvent ? *FoundTimedEvent : nullptr, ESelectInfo::Direct);
 }
 
 void SZEventEditor::NavigateTo(FGameplayTag EventTag)
@@ -542,9 +582,12 @@ TSharedRef<SWidget> SZEventEditor::BuildEventView()
 				.Text(FText::FromString("No event selected."));
 	}
 
-	if (GetEventType(CurrentEvent) != EZEventType::Simple)
+	const EZEventType CurrentEventType = GetEventType(CurrentEvent);
+	bool bRegularEvent = false;
+	if (CurrentEventType == EZEventType::Regular || CurrentEventType == EZEventType::Dialogue)
 	{
 		EditedEvent = *GetEventRow(CurrentEvent);
+		bRegularEvent = true;
 	}
 	
 	TSharedRef<SVerticalBox> VBox = SNew(SVerticalBox);
@@ -555,7 +598,7 @@ TSharedRef<SWidget> SZEventEditor::BuildEventView()
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
-			(GetEventType(CurrentEvent) != EZEventType::Simple)
+			bRegularEvent
 				? BuildEditableGameplayTagWidget(EditedEvent.NPC, ZGameplayTags::NPC, EZEditEventType::Current, 20)
 				: SNullWidget::NullWidget
 		]
@@ -590,58 +633,58 @@ TSharedRef<SWidget> SZEventEditor::BuildEventView()
 		]
 	];
 	
-	if (GetEventType(CurrentEvent) != EZEventType::Simple)
+	if (bRegularEvent)
 	{
 		VBox->AddSlot()
-		.FillHeight(1.f)
-		[
-			SNew(SVerticalBox)
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					BuildDetailsPropertyNameWidget(LOCTEXT("OnAvailableReactions", "On available reactions:"))
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					BuildEditableEventReactionsWidget(EZEventReactionType::OnAvailable)
-				]
-			]
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					BuildDetailsPropertyNameWidget(LOCTEXT("OnUnavailableReactions", "On unavailable reactions:"))
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					BuildEditableEventReactionsWidget(EZEventReactionType::OnUnavailable)
-				]
-			]
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					BuildDetailsPropertyNameWidget(LOCTEXT("OnCompletedReactions", "On completed reactions:"))
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				[
-					BuildEditableEventReactionsWidget(EZEventReactionType::OnCompleted)
-				]
-			]
-		];
+	   .FillHeight(1.f)
+	   [
+		   SNew(SVerticalBox)
+		   + SVerticalBox::Slot()
+		   .AutoHeight()
+		   [
+			   SNew(SHorizontalBox)
+			   + SHorizontalBox::Slot()
+			   .AutoWidth()
+			   [
+				   BuildDetailsPropertyNameWidget(LOCTEXT("OnAvailableReactions", "On available reactions:"))
+			   ]
+			   + SHorizontalBox::Slot()
+			   .AutoWidth()
+			   [
+				   BuildEditableEventReactionsWidget(EZEventReactionType::OnAvailable)
+			   ]
+		   ]
+		   + SVerticalBox::Slot()
+		   .AutoHeight()
+		   [
+			   SNew(SHorizontalBox)
+			   + SHorizontalBox::Slot()
+			   .AutoWidth()
+			   [
+				   BuildDetailsPropertyNameWidget(LOCTEXT("OnUnavailableReactions", "On unavailable reactions:"))
+			   ]
+			   + SHorizontalBox::Slot()
+			   .AutoWidth()
+			   [
+				   BuildEditableEventReactionsWidget(EZEventReactionType::OnUnavailable)
+			   ]
+		   ]
+		   + SVerticalBox::Slot()
+		   .AutoHeight()
+		   [
+			   SNew(SHorizontalBox)
+			   + SHorizontalBox::Slot()
+			   .AutoWidth()
+			   [
+				   BuildDetailsPropertyNameWidget(LOCTEXT("OnCompletedReactions", "On completed reactions:"))
+			   ]
+			   + SHorizontalBox::Slot()
+			   .AutoWidth()
+			   [
+				   BuildEditableEventReactionsWidget(EZEventReactionType::OnCompleted)
+			   ]
+		   ]
+	   ];
 	}
 	return VBox;
 }
@@ -756,22 +799,26 @@ TSharedRef<SWidget> SZEventEditor::CreateReactionTypeVBox(EZEventReactionType Ty
 
 TSharedRef<SWidget> SZEventEditor::BuildRemoveReactionButton(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type)
 {
-	return SNew(SButton)
-			.OnClicked_Lambda([this, Reaction, Type]()
-			{
-				const int32 Index = GetEventReactionList(Type).IndexOfByKey(Reaction);
-				if (ensure(Index != INDEX_NONE))
-				{
-					GetEventReactionList(Type).RemoveAt(Index);
-					GetEditedEventReactionList(Type).RemoveAt(Index);
-					OnCurrentEventEdited();
-					EventConditionListView->RequestListRefresh();
-				}
-				return FReply::Handled();
-			})
+	return SNew(SBox)
+			.Padding(6.f, 0.f, 0.f, 0.f)
 			[
-				SNew(SImage)
-				.Image(FAppStyle::GetBrush("GenericCommands.Delete"))
+				SNew(SButton)
+					.OnClicked_Lambda([this, Reaction, Type]()
+					{
+						const int32 Index = GetEventReactionList(Type).IndexOfByKey(Reaction);
+						if (ensure(Index != INDEX_NONE))
+						{
+							GetEventReactionList(Type).RemoveAt(Index);
+							GetEditedEventReactionList(Type).RemoveAt(Index);
+							OnCurrentEventEdited();
+							EventConditionListView->RequestListRefresh();
+						}
+						return FReply::Handled();
+					})
+					[
+						SNew(SImage)
+						.Image(FAppStyle::GetBrush("GenericCommands.Delete"))
+					]
 			];
 }
 
@@ -1014,6 +1061,73 @@ TSharedRef<SWidget> SZEventEditor::BuildEditableEventReactionWidget_CancelPath(T
 			];
 }
 
+TSharedRef<SWidget> SZEventEditor::BuildEditableEventReactionWidget_StartTimedEvent(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type)
+{
+	FZEventReaction_StartTimedEvent* StartTimedEventReaction = Reaction->GetMutablePtr<FZEventReaction_StartTimedEvent>();
+	return SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.f)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SNew(SZGameplayTagPickerButton)
+					.RootTag(ZGameplayTags::Event_Timed)
+					.PreSelected(ZGameplayTags::Event_Timed.GetTag().GetSingleTagContainer())
+					.OnTagsChanged_Lambda([this, Reaction, StartTimedEventReaction, Type](const FGameplayTagContainer& NewSelection)
+					{
+						StartTimedEventReaction->TimedEvent = (NewSelection.Num() > 0) ? NewSelection.First() : FGameplayTag::EmptyTag;
+						OnEventReactionEdited(Reaction, Type);
+					})
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SNew(SNumericEntryBox<int32>)
+					.AllowSpin(false)
+					.Value_Lambda([this, StartTimedEventReaction]()
+					{
+						return TOptional<int32>(StartTimedEventReaction->DurationHours);
+					})
+					.OnValueCommitted_Lambda([this, Reaction, StartTimedEventReaction, Type](int32 NewValue, ETextCommit::Type)
+					{
+						StartTimedEventReaction->DurationHours = NewValue;
+						OnEventReactionEdited(Reaction, Type);
+					})
+				]
+			];
+}
+
+TSharedRef<SWidget> SZEventEditor::BuildEditableEventReactionWidget_SetCanTrade(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type)
+{
+	FZEventReaction_SetCanTrade* SetCanTradeEventReaction = Reaction->GetMutablePtr<FZEventReaction_SetCanTrade>();
+	return SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.f)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SNew(SCheckBox)
+					.IsChecked_Lambda([SetCanTradeEventReaction]()
+					{
+						return SetCanTradeEventReaction->bCanTrade ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+					})
+					.OnCheckStateChanged_Lambda([this, Reaction, SetCanTradeEventReaction, Type](ECheckBoxState NewState)
+					{
+						SetCanTradeEventReaction->bCanTrade = NewState == ECheckBoxState::Checked;
+						OnEventReactionEdited(Reaction, Type);
+					})
+					[
+						SNew(STextBlock)
+						.Text(LOCTEXT("CanTrade", "CanTrade"))
+					]
+				]
+			];
+}
+
 TSharedRef<SWidget> SZEventEditor::BuildEditableEventReactionsWidget(EZEventReactionType Type)
 {
 	TArray<TSharedPtr<FInstancedStruct>>& EventReactionList = GetEventReactionList(Type);
@@ -1151,22 +1265,26 @@ TSharedPtr<SListView<TSharedPtr<FInstancedStruct>>>& SZEventEditor::GetEventReac
 
 TSharedRef<SWidget> SZEventEditor::BuildRemoveConditionButton(TSharedPtr<FInstancedStruct> Condition)
 {
-	return SNew(SButton)
-			.OnClicked_Lambda([this, Condition]()
-			{
-				const int32 Index = EventConditionList.IndexOfByKey(Condition);
-				if (ensure(Index != INDEX_NONE))
-				{
-					EventConditionList.RemoveAt(Index);
-					EditedDialogueOption.Conditions.RemoveAt(Index);
-					OnDialogueEdited();
-					EventConditionListView->RequestListRefresh();
-				}
-				return FReply::Handled();
-			})
+	return SNew(SBox)
+			.Padding(6.f, 0.f, 0.f, 0.f)
 			[
-				SNew(SImage)
-				.Image(FAppStyle::GetBrush("GenericCommands.Delete"))
+				SNew(SButton)
+				.OnClicked_Lambda([this, Condition]()
+				{
+					const int32 Index = EventConditionList.IndexOfByKey(Condition);
+					if (ensure(Index != INDEX_NONE))
+					{
+						EventConditionList.RemoveAt(Index);
+						EditedDialogueOption.Conditions.RemoveAt(Index);
+						OnDialogueEdited();
+						EventConditionListView->RequestListRefresh();
+					}
+					return FReply::Handled();
+				})
+				[
+					SNew(SImage)
+					.Image(FAppStyle::GetBrush("GenericCommands.Delete"))
+				]
 			];
 }
 
@@ -1420,7 +1538,7 @@ TSharedRef<SWidget> SZEventEditor::BuildEditableEventConditionsWidget()
 
 TSharedRef<SWidget> SZEventEditor::BuildDialogueView()
 {
-	if (GetEventType(CurrentEvent) != EZEventType::Dialogue)
+	if (!CurrentEvent.IsValid() || GetEventType(CurrentEvent) != EZEventType::Dialogue)
 	{
 		return SNullWidget::NullWidget;
 	}
@@ -1782,52 +1900,6 @@ TSharedRef<SWidget> SZEventEditor::BuildPreview(FGameplayTag Target)
 		];
 }
 
-TSharedRef<SWidget> SZEventEditor::GetSelectedDataTableWidget() const
-{
-	return SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			[
-				SNew(STextBlock)
-				.Text_Lambda([this]()
-				{
-					return GetEventTypeText(NewEvent.Table.Type);
-				})
-			]
-			+ SHorizontalBox::Slot()
-			.FillWidth(1.f)
-			.Padding(10.f)
-			[
-				SNullWidget::NullWidget
-			]
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			[
-				SNew(STextBlock)
-				.Text_Lambda([this]()
-				{
-					return NewEvent.Table.EventTable ? FText::FromString(NewEvent.Table.EventTable.GetName()) : ZEditorText::Invalid;
-				})
-			];
-}
-
-TSharedRef<SWidget> SZEventEditor::GetDataTableWidget(const FZEventDataTable& Item) const
-{
-	return SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.FillWidth(1.f)
-			[
-				SNew(STextBlock)
-				.Text(GetEventTypeText(Item.Type))
-			]
-			+ SHorizontalBox::Slot()
-			.FillWidth(1.f)
-			[
-				SNew(STextBlock)
-				.Text(Item.EventTable ? FText::FromString(Item.EventTable.GetName()) : ZEditorText::Invalid)
-			];
-}
-
 void SZEventEditor::UpdateNewEventWarning()
 {
 	FTextBuilder Builder;
@@ -1843,7 +1915,7 @@ void SZEventEditor::UpdateNewEventWarning()
 		{
 			return ChildNode->GetSimpleTagName().ToString() == NewEvent.TagName.ToString();
 		}))
-		if (AllRegularEvents.HasTagExact(NewEvent.RootTag) || AllDialogueOptions.HasTagExact(NewEvent.RootTag))
+		if (EventTypes[EZEventType::Regular].Events.HasTagExact(NewEvent.RootTag) || EventTypes[EZEventType::Dialogue].Events.HasTagExact(NewEvent.RootTag))
 		{
 			Builder.AppendLine(LOCTEXT("EventAlreadyAdded", "Selected event has already been added to a data table."));
 		}
@@ -1851,68 +1923,182 @@ void SZEventEditor::UpdateNewEventWarning()
 	InsertWidgetWarningText->SetText(Builder.ToText());
 }
 
-TSharedRef<SWidget> SZEventEditor::BuildEventTableComboBox()
+TSharedRef<SWidget> SZEventEditor::BuildEventTypeComboBox()
 {
-	if (FilteredDataTables.IsEmpty())
+	TSharedPtr<EZEventType> InitiallySelectedItem = nullptr;
+	if (ensure(FilteredEventTypes.Num() > 0))
 	{
-		return SNullWidget::NullWidget;
+		const int32 Idx = FilteredEventTypes.IndexOfByPredicate([this](TSharedPtr<EZEventType> EventType)
+		{
+			return NewEvent.Type == *EventType;
+		});
+		if (ensure(Idx != INDEX_NONE))
+		{
+			InitiallySelectedItem = FilteredEventTypes[Idx];
+		}
 	}
-	TSharedPtr<FZEventDataTable>* CurrentlySelectedTable = FilteredDataTables.FindByPredicate([this](const TSharedPtr<FZEventDataTable>& Table)
-	{
-		return NewEvent.Table.EventTable == Table->EventTable;
-	});
-	if (!ensure(CurrentlySelectedTable))
-	{
-		CurrentlySelectedTable = &FilteredDataTables[0];
-	}
-	return SAssignNew(EventTableComboBox, SComboBox<TSharedPtr<FZEventDataTable>>)
-			.OptionsSource(&FilteredDataTables)
-			.InitiallySelectedItem(*CurrentlySelectedTable)
-			.OnGenerateWidget_Lambda([this](TSharedPtr<FZEventDataTable> Item)
+	return SAssignNew(EventTypeComboBox, SComboBox<TSharedPtr<EZEventType>>)
+			.OptionsSource(&FilteredEventTypes)
+			.InitiallySelectedItem(InitiallySelectedItem)
+			.OnGenerateWidget_Lambda([this](TSharedPtr<EZEventType> Item)
 			{
-				return GetDataTableWidget(*Item);
+				if (!Item.IsValid())
+				{
+					return SNew(STextBlock)
+							.Text(ZEditorText::Invalid);
+				}
+				return SNew(STextBlock)
+						.Text(GetEventTypeText(*Item));
 			})
-			.OnSelectionChanged_Lambda([this](TSharedPtr<FZEventDataTable> Item, ESelectInfo::Type)
+			.OnSelectionChanged_Lambda([this](TSharedPtr<EZEventType> Item, ESelectInfo::Type)
 			{
-				NewEvent.Table = *Item;
+				if (Item.IsValid())
+				{
+					NewEvent.Type = *Item;
+				}
+				else
+				{
+					NewEvent.Type = EZEventType::Simple;
+				}
+				RefreshFilteredDataTables();
 			})
 			[
-				// Widget shown when dropdown is closed
-				GetSelectedDataTableWidget()
+				SNew(STextBlock)
+				.Text_Lambda([this]()
+				{
+					return GetEventTypeText(NewEvent.Type);
+				})
 			];
 }
 
-void SZEventEditor::RefreshFilteredDataTables(FGameplayTag SelectedTag)
+void SZEventEditor::RefreshFilteredEventTypes()
 {
-	FilteredDataTables.Empty();
-	for (const FZEventDataTable& DataTable : DataTables)
+	const FGameplayTag SelectedTag = NewEvent.RootTag;
+	FilteredEventTypes.Empty();
+	if (SelectedTag.MatchesTag(ZGameplayTags::Event_Dialogue))
 	{
-		if ((DataTable.Type == EZEventType::Dialogue) || !SelectedTag.MatchesTag(ZGameplayTags::Event_Dialogue))
-		{
-			FilteredDataTables.Add(MakeShared<FZEventDataTable>(DataTable));
-		}
+		FilteredEventTypes.Add(MakeShared<EZEventType>(EZEventType::Dialogue));
+	}
+	else if (SelectedTag.MatchesTag(ZGameplayTags::Event_Timed))
+	{
+		FilteredEventTypes.Add(MakeShared<EZEventType>(EZEventType::Timed));
+	}
+	else
+	{
+		FilteredEventTypes.Add(MakeShared<EZEventType>(EZEventType::Regular));
+		FilteredEventTypes.Add(MakeShared<EZEventType>(EZEventType::Simple));
 	}
 	// If current selection isn't valid select the first valid one
-	if (!FilteredDataTables.IsEmpty() && (!NewEvent.Table.EventTable || !FilteredDataTables.ContainsByPredicate([this](const TSharedPtr<FZEventDataTable>& EventDataTable)
+	if (ensure(!FilteredEventTypes.IsEmpty()))
+	{
+		if (!FilteredEventTypes.ContainsByPredicate([this](TSharedPtr<EZEventType> Type)
 		{
-			return NewEvent.Table.EventTable == EventDataTable->EventTable;
-		})))
-	{
-		NewEvent.Table = *FilteredDataTables[0];
+			return NewEvent.Type == *Type;
+		}))
+		{
+			NewEvent.Type = *FilteredEventTypes[0];
+		}
 	}
-	if (EventTableComboBox.IsValid())
+	// Set selection to the type of new event
+	if (EventTypeComboBox.IsValid())
 	{
-		EventTableComboBox->RefreshOptions();
-		if (TSharedPtr<FZEventDataTable>* FoundOption = FilteredDataTables.FindByPredicate([this](const TSharedPtr<FZEventDataTable>& EventDataTable)
+		EventTypeComboBox->RefreshOptions();
+		if (TSharedPtr<EZEventType>* FoundOption = FilteredEventTypes.FindByPredicate([this](const TSharedPtr<EZEventType>& EventType)
 			{
-				return EventDataTable->EventTable == NewEvent.Table.EventTable;
+				return NewEvent.Type == *EventType;
 			}))
 		{
-			EventTableComboBox->SetSelectedItem(*FoundOption);
+			EventTypeComboBox->SetSelectedItem(*FoundOption);
 		}
 		else
 		{
 			ensure(0);
+		}
+	}
+	RefreshFilteredDataTables();
+}
+
+TSharedRef<SWidget> SZEventEditor::BuildDataTableComboBox()
+{
+	TWeakObjectPtr<UDataTable> InitiallySelectedItem = nullptr;
+	const bool bHasDataTables = FilteredDataTables.Num() > 0;
+	if (bHasDataTables)
+	{
+		const int32 Idx = FilteredDataTables.IndexOfByPredicate([this](TWeakObjectPtr<UDataTable> DataTable)
+		{
+			return NewEvent.DataTable == DataTable.Get();
+		});
+		if (ensure(Idx != INDEX_NONE))
+		{
+			InitiallySelectedItem = FilteredDataTables[Idx];
+		}
+	}
+	return SAssignNew(DataTableComboBox, SComboBox<TWeakObjectPtr<UDataTable>>)
+			.OptionsSource(&FilteredDataTables)
+			.InitiallySelectedItem(InitiallySelectedItem)
+			.IsEnabled_Lambda([this]()
+			{
+				return (FilteredDataTables.Num() > 0);
+			})
+			.OnGenerateWidget_Lambda([this](TWeakObjectPtr<UDataTable> Item)
+			{
+				if (!Item.IsValid())
+				{
+					return SNew(STextBlock)
+							.Text(ZEditorText::Invalid);
+				}
+				return SNew(STextBlock)
+						.Text(FText::FromString(Item->GetName()));
+			})
+			.OnSelectionChanged_Lambda([this](TWeakObjectPtr<UDataTable> Item, ESelectInfo::Type)
+			{
+				NewEvent.DataTable = Item.Get();
+			})
+			[
+				SNew(STextBlock)
+				.Text_Lambda([this]()
+				{
+					return NewEvent.DataTable ? FText::FromString(NewEvent.DataTable.GetName()) : ZEditorText::None;
+				})
+			];
+}
+
+void SZEventEditor::RefreshFilteredDataTables()
+{
+	FilteredDataTables.Empty();
+	for (const TPair<TObjectPtr<UDataTable>, FGameplayTagContainer>& Pair : EventTypes[NewEvent.Type].EventTables)
+	{
+		FilteredDataTables.Add(TWeakObjectPtr<UDataTable>(Pair.Key));
+	}
+	// If current selection isn't valid select the first valid one
+	if (FilteredDataTables.IsEmpty())
+	{
+		NewEvent.DataTable = nullptr;
+	}
+	else
+	{
+		if (!FilteredDataTables.ContainsByPredicate([this](TWeakObjectPtr<UDataTable> DataTable)
+		{
+			return NewEvent.DataTable == DataTable.Get();
+		}))
+		{
+			NewEvent.DataTable = FilteredDataTables[0].Get();
+		}
+	}
+	// Set selection to the type of new event
+	if (DataTableComboBox.IsValid())
+	{
+		DataTableComboBox->RefreshOptions();
+		if (TWeakObjectPtr<UDataTable>* FoundOption = FilteredDataTables.FindByPredicate([this](TWeakObjectPtr<UDataTable> DataTable)
+			{
+				return NewEvent.DataTable == DataTable.Get();
+			}))
+		{
+			DataTableComboBox->SetSelectedItem(*FoundOption);
+		}
+		else
+		{
+			DataTableComboBox->ClearSelection();
 		}
 	}
 }
@@ -1941,7 +2127,6 @@ TSharedRef<SWidget> SZEventEditor::BuildInsertEventTagWidget()
 						[
 							SNew(SZGameplayTagPickerButton)
 							.RootTag(ZGameplayTags::Event)
-							.PreSelected(ZGameplayTags::Event.GetTag().GetSingleTagContainer())
 							.OnTagsChanged_Lambda([this](const FGameplayTagContainer& SelectedTag)
 							{
 								NewEventRootTag = SelectedTag.Num() > 0 ? SelectedTag.First() : ZGameplayTags::Event;
@@ -2001,7 +2186,7 @@ TSharedRef<SWidget> SZEventEditor::BuildInsertEventTagWidget()
 								const FGameplayTag NewGameplayTag = UGameplayTagsManager::Get().RequestGameplayTag(FName(*NewTag));
 								if (NewGameplayTag.IsValid())
 								{
-									AllSimpleEvents.AddTag(NewGameplayTag);
+									EventTypes[EZEventType::Simple].Events.AddTag(NewGameplayTag);
 									RefreshLists();
 								}
 								else
@@ -2018,7 +2203,8 @@ TSharedRef<SWidget> SZEventEditor::BuildInsertEventTagWidget()
 
 TSharedRef<SWidget> SZEventEditor::BuildInsertEventWidget()
 {
-	RefreshFilteredDataTables(FGameplayTag::EmptyTag);
+	NewEvent.RootTag = CurrentEvent;
+	RefreshFilteredEventTypes();
 
 	FGameplayTagContainer UnusedEvents = UGameplayTagsManager::Get().RequestGameplayTagChildren(ZGameplayTags::Event);
 	// UnusedEvents.RemoveTags(AllRegularEvents);
@@ -2032,27 +2218,6 @@ TSharedRef<SWidget> SZEventEditor::BuildInsertEventWidget()
 			.Padding(FMargin(8.f))
 			[
 				SNew(SVerticalBox)
-				+ SVerticalBox::Slot()
-				.AutoHeight()
-				.HAlign(HAlign_Fill)
-				[
-					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					[
-						SNew(SBox)
-						.MinDesiredWidth(NameColumnWidth)
-						[
-							SNew(STextBlock)
-							.Text(LOCTEXT("Table", "Table"))
-						]
-					]
-					+ SHorizontalBox::Slot()
-					.FillWidth(1.f)
-					[
-						BuildEventTableComboBox()
-					]
-				]
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				[
@@ -2072,11 +2237,12 @@ TSharedRef<SWidget> SZEventEditor::BuildInsertEventWidget()
 					[
 						SNew(SZGameplayTagPickerButton)
 						.RootTag(ZGameplayTags::Event)
-						.FilteredTags(UnusedEvents)
+						.PreSelected(NewEvent.RootTag.GetSingleTagContainer())
+						//.FilteredTags(UnusedEvents)
 						.OnTagsChanged_Lambda([this](const FGameplayTagContainer& NewTag)
 						{
 							NewEvent.RootTag = (NewTag.Num() > 0) ? NewTag.First() : FGameplayTag::EmptyTag;
-							RefreshFilteredDataTables(NewEvent.RootTag);
+							RefreshFilteredEventTypes();
 							UpdateNewEventWarning();
 							
 							GEditor->GetTimerManager()->SetTimerForNextTick([this]()
@@ -2118,6 +2284,48 @@ TSharedRef<SWidget> SZEventEditor::BuildInsertEventWidget()
 				]
 				+ SVerticalBox::Slot()
 				.AutoHeight()
+				.HAlign(HAlign_Fill)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SNew(SBox)
+						.MinDesiredWidth(NameColumnWidth)
+						[
+							SNew(STextBlock)
+							.Text(LOCTEXT("EventType", "Event type"))
+						]
+					]
+					+ SHorizontalBox::Slot()
+					.FillWidth(1.f)
+					[
+						BuildEventTypeComboBox()
+					]
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.HAlign(HAlign_Fill)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SNew(SBox)
+						.MinDesiredWidth(NameColumnWidth)
+						[
+							SNew(STextBlock)
+							.Text(LOCTEXT("DataTable", "Data table"))
+						]
+					]
+					+ SHorizontalBox::Slot()
+					.FillWidth(1.f)
+					[
+						BuildDataTableComboBox()
+					]
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
 				[
 					SAssignNew(InsertWidgetWarningText, STextBlock)
 					.Text(FText::GetEmpty())
@@ -2134,42 +2342,43 @@ TSharedRef<SWidget> SZEventEditor::BuildInsertEventWidget()
 		];
 }
 
-void SZEventEditor::LoadEvent(FZEventRow* EventRow, EZEventType Type)
+void SZEventEditor::LoadRegularEvent(FZEventRow* EventRow, EZEventType Type)
 {
 	if (Type == EZEventType::Regular)
 	{
-		AllRegularEvents.AddTag(EventRow->ID);
+		EventTypes[EZEventType::Regular].Events.AddTag(EventRow->ID);
 		EventsMap.Add(EventRow->ID, EventRow);
 	}
 	else if (Type == EZEventType::Dialogue)
 	{
-		AllDialogueOptions.AddTag(EventRow->ID);
+		EventTypes[EZEventType::Dialogue].Events.AddTag(EventRow->ID);
 		DialogueOptionsMap.Add(EventRow->ID, static_cast<FZDialogueOptionRow*>(EventRow));
 	}
-	else
+	
+	if ((Type == EZEventType::Regular) || (Type == EZEventType::Dialogue))
 	{
-		return;
-	}
-	RelatedEvents[EZEventRelation::Required].Add(EventRow->ID, EventRow->RequiredEvents);
-	RelatedEvents[EZEventRelation::Blocked].Add(EventRow->ID, EventRow->BlockedEvents);
-	for (const FGameplayTag RequiredEvent : EventRow->RequiredEvents)
-	{
-		RelatedEvents[EZEventRelation::RequiredBy].FindOrAdd(RequiredEvent).AddTag(EventRow->ID);
-	}
-	for (const FGameplayTag BlockedEvent : EventRow->BlockedEvents)
-	{
-		RelatedEvents[EZEventRelation::BlockedBy].FindOrAdd(BlockedEvent).AddTag(EventRow->ID);
+		RelatedEvents[EZEventRelation::Required].Add(EventRow->ID, EventRow->RequiredEvents);
+		RelatedEvents[EZEventRelation::BlockedBy].Add(EventRow->ID, EventRow->BlockedByEvents);
+		for (const FGameplayTag RequiredEvent : EventRow->RequiredEvents)
+		{
+			RelatedEvents[EZEventRelation::RequiredBy].FindOrAdd(RequiredEvent).AddTag(EventRow->ID);
+		}
+		for (const FGameplayTag BlockedByEvent : EventRow->BlockedByEvents)
+		{
+			RelatedEvents[EZEventRelation::Blocked].FindOrAdd(BlockedByEvent).AddTag(EventRow->ID);
+		}
 	}
 }
 
 void SZEventEditor::LoadEvents()
 {
-	DataTables.Empty();
+	for (int32 Idx = 0; Idx < static_cast<uint8>(EZEventType::MAX); ++Idx)
+	{
+		EventTypes[static_cast<EZEventType>(Idx)] = FZEventTypeData();
+	}
 	EventsMap.Empty();
 	DialogueOptionsMap.Empty();
-	AllRegularEvents.Reset();
-	AllDialogueOptions.Reset();
-	AllSimpleEvents.Reset();
+	
 	RelatedEvents[EZEventRelation::Required].Empty();
 	RelatedEvents[EZEventRelation::Blocked].Empty();
 	RelatedEvents[EZEventRelation::RequiredBy].Empty();
@@ -2186,10 +2395,10 @@ void SZEventEditor::LoadEvents()
 			Table->GetAllRows(TEXT("SZEventEditor::LoadEvents"), AllRows);
 			for (FZEventRow* EventRow : AllRows)
 			{
-				LoadEvent(EventRow, EZEventType::Regular);
+				LoadRegularEvent(EventRow, EZEventType::Regular);
 				AllTableEvents.AddTag(EventRow->ID);
 			}
-			DataTables.Add(FZEventDataTable(Table, EZEventType::Regular, AllTableEvents));
+			EventTypes[EZEventType::Regular].EventTables.Emplace(Table, AllTableEvents);
 		}
 	}
 
@@ -2202,21 +2411,33 @@ void SZEventEditor::LoadEvents()
 			Table->GetAllRows(TEXT("SZEventEditor::LoadEvents"), AllRows);
 			for (FZDialogueOptionRow* DialogueOption : AllRows)
 			{
-				LoadEvent(DialogueOption, EZEventType::Dialogue);
+				LoadRegularEvent(DialogueOption, EZEventType::Dialogue);
 				AllTableEvents.AddTag(DialogueOption->ID);
 			}
-			DataTables.Add(FZEventDataTable(Table, EZEventType::Dialogue, AllTableEvents));
+			EventTypes[EZEventType::Dialogue].EventTables.Emplace(Table, AllTableEvents);
 		}
 	}
 
 	const UGameplayTagsManager& TagsManager = UGameplayTagsManager::Get();
 	const FGameplayTag EventParentTag = FGameplayTag::RequestGameplayTag(FName("Event"));
 	const FGameplayTagContainer AllEventTags = TagsManager.RequestGameplayTagChildren(EventParentTag);
+	
 	for (const FGameplayTag& EventTag : AllEventTags)
 	{
-		if (!AllRegularEvents.HasTagExact(EventTag) && !AllDialogueOptions.HasTagExact(EventTag))
+		if (!EventTypes[EZEventType::Regular].Events.HasTagExact(EventTag) && !EventTypes[EZEventType::Dialogue].Events.HasTagExact(EventTag))
 		{
-			AllSimpleEvents.AddTag(EventTag);
+			if (EventTag.MatchesTag(ZGameplayTags::Event_Timed))
+			{
+				const FName TagLeafName = EventTag.GetTagLeafName();
+				if ((TagLeafName != ZGameplayTags::TimedEventCompletedLeafName) && (TagLeafName != ZGameplayTags::TimedEventExpiredLeafName))
+				{
+					EventTypes[EZEventType::Timed].Events.AddTag(EventTag);
+				}
+			}
+			else
+			{
+				EventTypes[EZEventType::Simple].Events.AddTag(EventTag);
+			}
 		}
 	}
 	
@@ -2243,7 +2464,7 @@ void SZEventEditor::RefreshLists()
 	Filter.ParseIntoArray(FilterWords, TEXT(" "), true);
 
 	FilteredEvents.Empty();
-	for (const FGameplayTag& EventTag : AllRegularEvents)
+	for (const FGameplayTag& EventTag : EventTypes[EZEventType::Regular].Events)
 	{
 		if (MatchesFilterWords(EventTag, FilterWords))
 		{
@@ -2264,7 +2485,7 @@ void SZEventEditor::RefreshLists()
 	}
 
 	FilteredDialogueOptions.Empty();
-	for (const FGameplayTag& DialogueOptionTag : AllDialogueOptions)
+	for (const FGameplayTag& DialogueOptionTag : EventTypes[EZEventType::Dialogue].Events)
 	{
 		if (MatchesFilterWords(DialogueOptionTag, FilterWords))
 		{
@@ -2285,7 +2506,7 @@ void SZEventEditor::RefreshLists()
 	}
 
 	FilteredSimpleEvents.Empty();
-	for (const FGameplayTag& SimpleEventTag : AllSimpleEvents)
+	for (const FGameplayTag& SimpleEventTag : EventTypes[EZEventType::Simple].Events)
 	{
 		if (MatchesFilterWords(SimpleEventTag, FilterWords))
 		{
@@ -2303,6 +2524,27 @@ void SZEventEditor::RefreshLists()
 	if (SimpleEventListView.IsValid())
 	{
 		SimpleEventListView->RequestListRefresh();
+	}
+
+	FilteredTimedEvents.Empty();
+	for (const FGameplayTag& TimedEventTag : EventTypes[EZEventType::Timed].Events)
+	{
+		if (MatchesFilterWords(TimedEventTag, FilterWords))
+		{
+			if (bShowRepeatable || !TimedEventTag.MatchesTag(ZGameplayTags::Event_Repeatable))
+			{
+				FilteredTimedEvents.Add(MakeShared<FGameplayTag>(TimedEventTag));
+			}
+		}
+	}
+	// Sort alphabetically
+	FilteredTimedEvents.Sort([](const TSharedPtr<FGameplayTag>& A, const TSharedPtr<FGameplayTag>& B)
+	{
+		return A->GetTagName().LexicalLess(B->GetTagName());
+	});
+	if (TimedEventListView.IsValid())
+	{
+		TimedEventListView->RequestListRefresh();
 	}
 }
 
@@ -2349,7 +2591,6 @@ FReply SZEventEditor::OnCurrentEventRelationRemoved(EZEventRelation Relation, FG
 	if (!Container.HasTagExact(SelectedEvent))
 	{
 		UE_LOG(LogZEventEditor, Error, TEXT("%s is already not related to %s (%s)"), *CurrentEvent.ToString(), *SelectedEvent.ToString(), *ENUM_TO_STRING(EZEventRelation, Relation));
-		ensure(0);
 		return FReply::Handled();
 	}
 	Container.RemoveTag(SelectedEvent);
@@ -2454,6 +2695,11 @@ void SZEventEditor::EditCurrentEventRelation(EZEventRelation Relation)
 
 void SZEventEditor::OnCurrentEventRelationAdded(EZEventRelation Relation, FGameplayTag SelectedEvent)
 {
+	if (CurrentEvent == SelectedEvent)
+	{
+		UE_LOG(LogZEventEditor, Error, TEXT("Event can't be related to itself."));
+		return;
+	}
 	FGameplayTagContainer& Container = CurrentDirectlyRelatedEvents[Relation];
 	if (Container.HasTagExact(SelectedEvent))
 	{
@@ -2468,13 +2714,13 @@ void SZEventEditor::OnCurrentEventRelationAdded(EZEventRelation Relation, FGamep
 		OnEventRelationAdded(EZEventRelation::Required, CurrentEvent, SelectedEvent);
 		break;
 	case EZEventRelation::Blocked:
-		OnEventRelationAdded(EZEventRelation::Blocked, CurrentEvent, SelectedEvent);
+		OnEventRelationAdded(EZEventRelation::BlockedBy, SelectedEvent, CurrentEvent);
 		break;
 	case EZEventRelation::RequiredBy:
 		OnEventRelationAdded(EZEventRelation::Required, SelectedEvent, CurrentEvent);
 		break;
 	case EZEventRelation::BlockedBy:
-		OnEventRelationAdded(EZEventRelation::Required, SelectedEvent, CurrentEvent);
+		OnEventRelationAdded(EZEventRelation::BlockedBy, CurrentEvent, SelectedEvent);
 		break;
 	}
 	RebuildContentArea();
@@ -2486,18 +2732,13 @@ void SZEventEditor::OnEventRelationAdded(EZEventRelation Relation, FGameplayTag 
 	{
 	case EZEventRelation::Required:
 		{
-			FGameplayTagContainer& FromRequiredEvents = RelatedEvents[EZEventRelation::Required].FindOrAdd(From);
-			FromRequiredEvents.AddTag(To);
-			FGameplayTagContainer& ToRequiredByEvents = RelatedEvents[EZEventRelation::RequiredBy].FindOrAdd(To);
-			ToRequiredByEvents.AddTag(From);
+			RelatedEvents[EZEventRelation::Required].FindOrAdd(From).AddTag(To);
+			RelatedEvents[EZEventRelation::RequiredBy].FindOrAdd(To).AddTag(From);
 			break;
 		}
 	case EZEventRelation::Blocked:
 		{
-			FGameplayTagContainer& FromBlockedEvents = RelatedEvents[EZEventRelation::Blocked].FindOrAdd(From);
-			FromBlockedEvents.AddTag(To);
-			FGameplayTagContainer& ToBlockedByEvents = RelatedEvents[EZEventRelation::BlockedBy].FindOrAdd(To);
-			ToBlockedByEvents.AddTag(From);
+			ensure(0);
 			break;
 		}
 	case EZEventRelation::RequiredBy:
@@ -2507,7 +2748,8 @@ void SZEventEditor::OnEventRelationAdded(EZEventRelation Relation, FGameplayTag 
 		}
 	case EZEventRelation::BlockedBy:
 		{
-			ensure(0);
+			RelatedEvents[EZEventRelation::Blocked].FindOrAdd(To).AddTag(From);
+			RelatedEvents[EZEventRelation::BlockedBy].FindOrAdd(From).AddTag(To);
 			break;
 		}
 	}
@@ -2546,10 +2788,10 @@ FReply SZEventEditor::OnInsertEventTag()
 
 FReply SZEventEditor::OnInsert()
 {
-	if (DataTables.Num() == 0)
+	if (EventTypes.Num() == 0)
 	{
 		ensure(0);
-		UE_LOG(LogZEventEditor, Error, TEXT("No data tables linked."));
+		UE_LOG(LogZEventEditor, Error, TEXT("No data types available."));
 		return FReply::Handled();
 	}
 	NewEvent.Reset();
@@ -2573,9 +2815,12 @@ FReply SZEventEditor::OnRevert()
 	SetEditMode(false);
 	
 	TArray<UPackage*> DataTablePackages;
-	for (const FZEventDataTable& EventDataTable : DataTables)
+	for (const TPair<EZEventType, FZEventTypeData>& EventType : EventTypes)
 	{
-		DataTablePackages.Add(EventDataTable.EventTable.GetPackage());
+		for (const TPair<TObjectPtr<UDataTable>, FGameplayTagContainer>& Pair : EventType.Value.EventTables)
+		{
+			DataTablePackages.Add(Pair.Key.GetPackage());
+		}
 	}
 	bool bOutAnyPackagesReloaded; 
 	FText OutErrorMessage;
@@ -2592,13 +2837,16 @@ FReply SZEventEditor::Save()
 	RebuildContentArea();
 	RebuildDetailsArea();
 	
-	for (const FZEventDataTable& EventDataTable : DataTables)
+	for (const TPair<EZEventType, FZEventTypeData>& EventType : EventTypes)
 	{
-		UPackage* Package = EventDataTable.EventTable->GetPackage();
-		const FString PackageFileName = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
-		FSavePackageArgs SaveArgs;
-		SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
-		UPackage::SavePackage(Package, EventDataTable.EventTable, *PackageFileName, SaveArgs);
+		for (const TPair<TObjectPtr<UDataTable>, FGameplayTagContainer>& Pair : EventType.Value.EventTables)
+		{
+			UPackage* Package = Pair.Key->GetPackage();
+			const FString PackageFileName = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+			FSavePackageArgs SaveArgs;
+			SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+			UPackage::SavePackage(Package, Pair.Key, *PackageFileName, SaveArgs);
+		}
 	}
 	
 	return FReply::Handled();
@@ -2661,15 +2909,16 @@ void SZEventEditor::OnShowPreviewFullNamesCheckStateChanged(ECheckBoxState NewSt
 
 EZEventType SZEventEditor::GetEventType(FGameplayTag Event) const
 {
-	if (AllRegularEvents.HasTagExact(Event))
+	for (int32 Idx = 0; Idx < static_cast<uint8>(EZEventType::MAX); ++Idx)
 	{
-		return EZEventType::Regular;
+		const EZEventType Type = static_cast<EZEventType>(Idx);
+		if (EventTypes[Type].Events.HasTagExact(Event))
+		{
+			return Type;
+		}
 	}
-	if (AllDialogueOptions.HasTagExact(Event))
-	{
-		return EZEventType::Dialogue;
-	}
-	return EZEventType::Simple;
+	ensure(0);
+	return EZEventType::MAX;
 }
 
 void SZEventEditor::AddRelatedEventsList(TSharedRef<SVerticalBox> VBox, EZEventRelation Relation)
@@ -2797,7 +3046,7 @@ TSharedRef<SWidget> SZEventEditor::GetAreaHeaderContent(EZEventRelation Relation
 		break;
 	case EZEventRelation::BlockedBy:
 		Title = LOCTEXT("BlockedByEvents", "Blocked by events");
-		Description = FText::Format(LOCTEXT("BlockedByEventsDetails", "Events that {0} requires"), FText::FromName(CurrentEvent.GetTagName()));
+		Description = FText::Format(LOCTEXT("BlockedByEventsDetails", "Events that are blocked by {0}"), FText::FromName(CurrentEvent.GetTagName()));
 		break;
 	}
 	return SNew(SHorizontalBox)
@@ -2979,7 +3228,7 @@ void SZEventEditor::OnEventEdited(FGameplayTag EditedRegularEvent)
 	ModifyDataTable(EditedRegularEvent, [this, EditedRegularEvent, EventRow]()
 	{
 		EventRow->RequiredEvents = RelatedEvents[EZEventRelation::Required][EditedRegularEvent];
-		EventRow->BlockedEvents = RelatedEvents[EZEventRelation::Blocked][EditedRegularEvent];
+		EventRow->BlockedByEvents = RelatedEvents[EZEventRelation::BlockedBy][EditedRegularEvent];
 	});
 }
 
@@ -3070,9 +3319,11 @@ FReply SZEventEditor::InsertEvent()
 	{
 		return FReply::Handled();
 	}
-	if (AllRegularEvents.HasTagExact(NewTag) || AllDialogueOptions.HasTagExact(NewTag))
+	if (EventTypes[EZEventType::Regular].Events.HasTagExact(NewTag) 
+		|| EventTypes[EZEventType::Dialogue].Events.HasTagExact(NewTag) 
+		|| EventTypes[EZEventType::Timed].Events.HasTagExact(NewTag))
 	{
-		UE_LOG(LogZEventEditor, Error, TEXT("Trying to add %s but it already exists in an event data table"), *NewTag.ToString());
+		UE_LOG(LogZEventEditor, Error, TEXT("Trying to add %s but it already exists"), *NewTag.ToString());
 		return FReply::Handled();
 	}
 	if (!NewTag.MatchesTag(ZGameplayTags::Event))
@@ -3080,61 +3331,84 @@ FReply SZEventEditor::InsertEvent()
 		UE_LOG(LogZEventEditor, Error, TEXT("Invalid tag: %s"), *NewTag.ToString());
 		return FReply::Handled();
 	}
-	if (!(NewEvent.Table.EventTable && ((NewEvent.Table.Type == EZEventType::Regular) || (NewEvent.Table.Type == EZEventType::Dialogue))))
-	{
-		ensure(0);
-		return FReply::Handled();
-	}
 	HidePopupMenu();
 	SetEditMode(true);
 	
-	FName NewName = DataTableUtils::MakeValidName(TEXT("NewRow"));
-	const TArray<FName> ExisitngNames = NewEvent.Table.EventTable->GetRowNames();
-	while (ExisitngNames.Contains(NewName))
+	if ((NewEvent.Type == EZEventType::Regular) || (NewEvent.Type == EZEventType::Dialogue))
 	{
-		NewName.SetNumber(NewName.GetNumber() + 1);
-	}
-	FZEventRow* NewRow = reinterpret_cast<FZEventRow*>(FDataTableEditorUtils::AddRow(NewEvent.Table.EventTable, NewName));
-	NewRow->ID = NewTag;
-	
-	// Try to automatically determine the NPC belonging to the event
-	FGameplayTag NPC = FGameplayTag::EmptyTag;
-	const UGameplayTagsManager& GameplayTagsManager = UGameplayTagsManager::Get();
-	TSharedPtr<FGameplayTagNode> NPCNode = GameplayTagsManager.FindTagNode(ZGameplayTags::NPC);
-	if (ensure(NPCNode.IsValid()))
-	{
-		TArray<TSharedPtr<FGameplayTagNode>> NPCNodes = NPCNode->GetChildTagNodes();
-		TSharedPtr<FGameplayTagNode> NewTagNode = GameplayTagsManager.FindTagNode(NewTag);
-		while (NewTagNode.IsValid())
+		if (!NewEvent.DataTable)
 		{
-			const int32 Idx = NPCNodes.IndexOfByPredicate([NewTagNode](const TSharedPtr<FGameplayTagNode>& NPCNode)
+			ensure(0);
+			return FReply::Handled();
+		}
+		FName NewName = DataTableUtils::MakeValidName(TEXT("NewRow"));
+		const TArray<FName> ExistingNames = NewEvent.DataTable->GetRowNames();
+		while (ExistingNames.Contains(NewName))
+		{
+			NewName.SetNumber(NewName.GetNumber() + 1);
+		}
+		FZEventRow* NewRow = reinterpret_cast<FZEventRow*>(FDataTableEditorUtils::AddRow(NewEvent.DataTable, NewName));
+		NewRow->ID = NewTag;
+	
+		// Try to automatically determine the NPC belonging to the event
+		FGameplayTag NPC = FGameplayTag::EmptyTag;
+		const UGameplayTagsManager& GameplayTagsManager = UGameplayTagsManager::Get();
+		TSharedPtr<FGameplayTagNode> NPCNode = GameplayTagsManager.FindTagNode(ZGameplayTags::NPC);
+		if (ensure(NPCNode.IsValid()))
+		{
+			TArray<TSharedPtr<FGameplayTagNode>> NPCNodes = NPCNode->GetChildTagNodes();
+			TSharedPtr<FGameplayTagNode> NewTagNode = GameplayTagsManager.FindTagNode(NewTag);
+			while (NewTagNode.IsValid())
 			{
-				return NPCNode->GetSimpleTagName() == NewTagNode->GetSimpleTagName();
-			});
-			if (Idx != INDEX_NONE)
-			{
-				NPC = NPCNodes[Idx]->GetCompleteTag();
-				// Don't break we want to match the node closes to the root
+				const int32 Idx = NPCNodes.IndexOfByPredicate([NewTagNode](const TSharedPtr<FGameplayTagNode>& NPCNode)
+				{
+					return NPCNode->GetSimpleTagName() == NewTagNode->GetSimpleTagName();
+				});
+				if (Idx != INDEX_NONE)
+				{
+					NPC = NPCNodes[Idx]->GetCompleteTag();
+					// Don't break we want to match the node closes to the root
+				}
+				NewTagNode = NewTagNode->GetParentTagNode();
 			}
-			NewTagNode = NewTagNode->GetParentTagNode();
 		}
-	}
-	NewRow->NPC = NPC;
+		NewRow->NPC = NPC;
 	
-	if (NewEvent.Table.Type == EZEventType::Dialogue)
-	{
-		FZDialogueOptionRow* DialogueOptionRow = static_cast<FZDialogueOptionRow*>(NewRow);
-		DialogueOptionRow->bRepeatable = DialogueOptionRow->ID.MatchesTag(ZGameplayTags::Event_Repeatable);
-	}
-	LoadEvent(NewRow, NewEvent.Table.Type);
-	
-	for (FZEventDataTable& EventDataTable : DataTables)
-	{
-		if (EventDataTable.EventTable == NewEvent.Table.EventTable)
+		if (NewEvent.Type == EZEventType::Dialogue)
 		{
-			EventDataTable.Events.AddTag(NewTag);
-			break;
+			FZDialogueOptionRow* DialogueOptionRow = static_cast<FZDialogueOptionRow*>(NewRow);
+			DialogueOptionRow->bRepeatable = DialogueOptionRow->ID.MatchesTag(ZGameplayTags::Event_Repeatable);
+			
+			FGameplayTag ParentTag = NewTag.RequestDirectParent();
+			if (FZDialogueOptionRow** ParentDialogueOptionRow = DialogueOptionsMap.Find(ParentTag))
+			{
+				DialogueOptionRow->RequiredEvents.AddTag(ParentTag);
+				if ((*ParentDialogueOptionRow)->bLocksDialogue)
+				{
+					DialogueOptionRow->ContinuationFrom = ParentTag;
+				}
+			}
 		}
+		LoadRegularEvent(NewRow, NewEvent.Type);
+		EventTypes[NewEvent.Type].EventTables[NewEvent.DataTable].AddTag(NewTag);
+	}
+	else if (NewEvent.Type == EZEventType::Timed)
+	{
+		const FString TimedEventCompletedStr = FString::Printf(TEXT("%s.%s"), *NewTagStr, *ZGameplayTags::TimedEventCompletedLeafName.ToString());
+		if (!IGameplayTagsEditorModule::Get().AddNewGameplayTagToINI(TimedEventCompletedStr, TEXT("")))
+		{
+			UE_LOG(LogZEventEditor, Error, TEXT("Error adding timed event completed tag for %s"), *NewTagStr);
+		}
+		const FString TimedEventExpiredStr = FString::Printf(TEXT("%s.%s"), *NewTagStr, *ZGameplayTags::TimedEventExpiredLeafName.ToString());
+		if (!IGameplayTagsEditorModule::Get().AddNewGameplayTagToINI(TimedEventExpiredStr, TEXT("")))
+		{
+			UE_LOG(LogZEventEditor, Error, TEXT("Error adding timed event expired tag for %s"), *NewTagStr);
+		}
+		EventTypes[EZEventType::Timed].Events.AddTag(NewTag);
+	}
+	else if (NewEvent.Type == EZEventType::Simple)
+	{
+		EventTypes[EZEventType::Simple].Events.AddTag(NewTag);
 	}
 	
 	RefreshLists();
@@ -3142,29 +3416,54 @@ FReply SZEventEditor::InsertEvent()
 	return FReply::Handled();
 }
 
-void SZEventEditor::DeleteTag(FGameplayTag TagToDelete)
+TArray<TSharedPtr<FGameplayTagNode>> SZEventEditor::GetChildNodes(TSharedPtr<FGameplayTagNode> Node) const
+{
+	TArray<TSharedPtr<FGameplayTagNode>> ChildNodes = { Node };
+	for (TSharedPtr<FGameplayTagNode> ChildNode : Node->GetChildTagNodes())
+	{
+		ChildNodes.Append(GetChildNodes(ChildNode));
+	}
+	return ChildNodes;
+}
+
+void SZEventEditor::DeleteTags(const FGameplayTagContainer& TagsToDelete)
 {
 	UGameplayTagsManager& TagsManager = UGameplayTagsManager::Get();
-	TSharedPtr<FGameplayTagNode> NodeToDelete = TagsManager.FindTagNode(TagToDelete);
-	if (NodeToDelete.IsValid())
+	TSet<TSharedPtr<FGameplayTagNode>> NodesToDelete;
+	FGameplayTagContainer AllDeletedTags;
+	for (const FGameplayTag TagToDelete : TagsToDelete)
 	{
-		if (IGameplayTagsEditorModule::Get().DeleteTagFromINI(NodeToDelete))
+		if (TSharedPtr<FGameplayTagNode> NodeToDelete = TagsManager.FindTagNode(TagToDelete))
 		{
-			UE_LOG(LogZEventEditor, Log, TEXT("Successfully deleted tag: %s"), *TagToDelete.ToString());
+			AllDeletedTags.AddTag(TagToDelete);
+			NodesToDelete.Add(NodeToDelete);
+			TArray<TSharedPtr<FGameplayTagNode>> ChildNodes = GetChildNodes(NodeToDelete);
+			for (TSharedPtr<FGameplayTagNode> ChildNode : ChildNodes)
+			{
+				AllDeletedTags.AddTag(ChildNode->GetCompleteTag());
+			}
+			NodesToDelete.Append(ChildNodes);
 		}
 		else
 		{
-			UE_LOG(LogZEventEditor, Error, TEXT("Couldn't delete tag: %s"), *TagToDelete.ToString());
+			UE_LOG(LogZEventEditor, Error, TEXT("Couldn't find node for %s"), *TagToDelete.ToString());
 		}
 	}
-	else
+	
+	EventTypes[EZEventType::Simple].Events.RemoveTags(AllDeletedTags);
+	EventTypes[EZEventType::Timed].Events.RemoveTags(AllDeletedTags);
+	
+	IGameplayTagsEditorModule::Get().DeleteTagsFromINI(NodesToDelete.Array());
+	RefreshLists();
+	if (AllDeletedTags.HasTagExact(CurrentEvent))
 	{
-		UE_LOG(LogZEventEditor, Error, TEXT("Couldn't find tag node for: %s"), *TagToDelete.ToString());
+		NavigateTo(FGameplayTag::EmptyTag);
 	}
 }
 
 FReply SZEventEditor::RemoveEvent()
 {
+	EZEventType Type = GetEventType(CurrentEvent);
 	if (UDataTable* Table = GetDataTable(CurrentEvent))
 	{
 		for (const TPair<FName, uint8*>& Pair : Table->GetRowMap())
@@ -3176,31 +3475,18 @@ FReply SZEventEditor::RemoveEvent()
 				break;
 			}
 		}
-		
-		for (FZEventDataTable& EventDataTable : DataTables)
-		{
-			if (EventDataTable.EventTable == Table)
-			{
-				EventDataTable.Events.RemoveTag(CurrentEvent);
-				break;
-			}
-		}
+		EventTypes[Type].EventTables[Table].RemoveTag(CurrentEvent);
 	}
 	
-	const EZEventType Type = GetEventType(CurrentEvent);
+	EventTypes[Type].Events.RemoveTag(CurrentEvent);
+	
 	if (Type == EZEventType::Regular)
 	{
-		AllRegularEvents.RemoveTag(CurrentEvent);
 		EventsMap.Remove(CurrentEvent);
 	}
 	else if (Type == EZEventType::Dialogue)
 	{
-		AllDialogueOptions.RemoveTag(CurrentEvent);
 		DialogueOptionsMap.Remove(CurrentEvent);
-	}
-	else if (Type == EZEventType::Simple)
-	{
-		AllSimpleEvents.RemoveTag(CurrentEvent);
 	}
 	
 	RelatedEvents[EZEventRelation::Required].Remove(CurrentEvent);
@@ -3208,7 +3494,8 @@ FReply SZEventEditor::RemoveEvent()
 	RelatedEvents[EZEventRelation::RequiredBy].Remove(CurrentEvent);
 	RelatedEvents[EZEventRelation::BlockedBy].Remove(CurrentEvent);
 	
-	DeleteTag(CurrentEvent);
+	// For now put it among the simple events, in the future we might just remove the tag entirely if no references are held
+	EventTypes[EZEventType::Simple].Events.AddTag(CurrentEvent);
 	
 	RefreshLists();
 	NavigateTo(FGameplayTag::EmptyTag);
@@ -3231,25 +3518,67 @@ FZEventRow* SZEventEditor::GetEventRow(FGameplayTag EventID)
 
 UDataTable* SZEventEditor::GetDataTable(FGameplayTag EventID)
 {
-	if (FZEventDataTable* FoundTable = DataTables.FindByPredicate([EventID](const FZEventDataTable& EventTable)
+	EZEventType Type = GetEventType(EventID);
+	for (const TPair<TObjectPtr<UDataTable>, FGameplayTagContainer>& Pair : EventTypes[Type].EventTables)
 	{
-		return EventTable.Events.HasTagExact(EventID);
-	}))
-	{
-		return FoundTable->EventTable;
+		if (Pair.Value.HasTagExact(EventID))
+		{
+			return Pair.Key;
+		}
 	}
 	return nullptr;
 }
 
+TSharedRef<SWidget> SZEventEditor::BuildRemoveTagsWidget()
+{
+	TagsToRemove.Reset();
+	FGameplayTagContainer FilteredTags;
+	FGameplayTagContainer RegularEvents;
+	RegularEvents.AppendTags(EventTypes[EZEventType::Regular].Events);
+	RegularEvents.AppendTags(EventTypes[EZEventType::Dialogue].Events);
+	for (const FGameplayTag SimpleTag : EventTypes[EZEventType::Simple].Events)
+	{
+		if (!RegularEvents.HasTag(SimpleTag))
+		{
+			FilteredTags.AddTag(SimpleTag);
+		}
+	}
+	for (const FGameplayTag TimedTag : EventTypes[EZEventType::Timed].Events)
+	{
+		if (!RegularEvents.HasTag(TimedTag))
+		{
+			FilteredTags.AddTag(TimedTag);
+		}
+	}
+	return SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(SZGameplayTagPicker)
+				.RootTag(ZGameplayTags::Event)
+				.bMultiSelect(true)
+				.FilteredTags(FilteredTags)
+				.OnTagsChanged_Lambda([this](const FGameplayTagContainer& SelectedTags)
+				{
+					TagsToRemove = SelectedTags;
+				})
+				.OnClosed_Lambda([this]()
+				{
+					DeleteTags(TagsToRemove);
+					TagsToRemove.Reset();
+					HidePopupMenu();
+				})
+			];
+}
+
 void SZEventEditor::ValidateAll()
 {
-	for (const FGameplayTag Event : AllRegularEvents)
+	for (int32 Idx = 0; Idx < static_cast<uint8>(EZEventType::MAX); ++Idx)
 	{
-		Validate(Event);
-	}
-	for (const FGameplayTag Event : AllDialogueOptions)
-	{
-		Validate(Event);
+		for (const FGameplayTag Event : EventTypes[static_cast<EZEventType>(Idx)].Events)
+		{
+			Validate(Event);
+		}
 	}
 }
 
@@ -3265,6 +3594,10 @@ void SZEventEditor::Validate(FGameplayTag Event)
 		if (DialogueRow->ContinuationFrom.IsValid() && DialogueRow->ContinuationFrom == DialogueRow->ID)
 		{
 			UE_LOG(LogZEventEditor, Error, TEXT("%s is continuing from itself"), *DialogueRow->ContinuationFrom.ToString());
+		}
+		if (DialogueRow->bLocksDialogue && DialogueRow->bEndsDialogue)
+		{
+			UE_LOG(LogZEventEditor, Error, TEXT("%s both locks and ends dialogue"), *DialogueRow->ID.ToString());
 		}
 	}
 	UE_LOG(LogZEventEditor, Log, TEXT("Validating %s completed"), *Event.ToString());

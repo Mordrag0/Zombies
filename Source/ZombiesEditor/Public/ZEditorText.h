@@ -16,28 +16,29 @@ namespace ZEditorText
 	const FText OK = NSLOCTEXT("ZombiesEditor", "OK", "OK");
 	
 	const FText Invalid = NSLOCTEXT("ZombiesEditor", "Invalid", "Invalid");
+	const FText None = NSLOCTEXT("ZombiesEditor", "None", "None");
 	
 	const FText RegularEvent = NSLOCTEXT("ZombiesEditor", "RegularEvent", "Regular Event");
 	const FText DialogueEvent = NSLOCTEXT("ZombiesEditor", "DialogueEvent", "Dialogue Event");
 	const FText SimpleEvent = NSLOCTEXT("ZombiesEditor", "SimpleEvent", "Simple Event");
+	const FText TimedEvent = NSLOCTEXT("ZombiesEditor", "TimedEvent", "Timed Event");
 	
-	const FText Inventory = NSLOCTEXT("ZombiesEditor", "Inventory", "Inventory");
-	const FText Reputation = NSLOCTEXT("ZombiesEditor", "Reputation", "Reputation");
-	const FText Skill = NSLOCTEXT("ZombiesEditor", "Skill", "Skill");
+	const FText Condition_Inventory = NSLOCTEXT("ZombiesEditor", "Condition_Inventory", "Inventory");
+	const FText Condition_Reputation = NSLOCTEXT("ZombiesEditor", "Condition_Reputation", "Reputation");
+	const FText Condition_Skill = NSLOCTEXT("ZombiesEditor", "Condition_Skill", "Skill");
 	
-	const FText ReceiveItem = NSLOCTEXT("ZombiesEditor", "ReceiveItem", "Receive item");
-	const FText GiveItem = NSLOCTEXT("ZombiesEditor", "GiveItem", "Give item");
-	const FText GainXP = NSLOCTEXT("ZombiesEditor", "GainXP", "Gain XP");
-	const FText HomeTransform = NSLOCTEXT("ZombiesEditor", "HomeTransform", "Home transform");
-	const FText StartPath = NSLOCTEXT("ZombiesEditor", "StartPath", "Start path");
-	const FText CancelPath = NSLOCTEXT("ZombiesEditor", "CancelPath", "Cancel path");
-	const FText CompletePath = NSLOCTEXT("ZombiesEditor", "CompletePath", "Complete path");
-	const FText Attack = NSLOCTEXT("ZombiesEditor", "Attack", "Attack");
-	const FText TakeStolenItems = NSLOCTEXT("ZombiesEditor", "TakeStolenItems", "Take stolen items");
-	const FText WarnAboutBreakingIn = NSLOCTEXT("ZombiesEditor", "WarnAboutBreakingIn", "Warn about breaking in");
-	const FText DialogueAvailable = NSLOCTEXT("ZombiesEditor", "DialogueAvailable", "Dialogue available");
-	const FText DialogueUnavailable = NSLOCTEXT("ZombiesEditor", "DialogueUnavailable", "Dialogue unavailable");
-	const FText DialogueCompleted = NSLOCTEXT("ZombiesEditor", "DialogueCompleted", "Dialogue completed");
+	const FText Reaction_ReceiveItem = NSLOCTEXT("ZombiesEditor", "Reaction_ReceiveItem", "Receive item");
+	const FText Reaction_GiveItem = NSLOCTEXT("ZombiesEditor", "Reaction_GiveItem", "Give item");
+	const FText Reaction_GainXP = NSLOCTEXT("ZombiesEditor", "Reaction_GainXP", "Gain XP");
+	const FText Reaction_HomeTransform = NSLOCTEXT("ZombiesEditor", "Reaction_HomeTransform", "Home transform");
+	const FText Reaction_StartPath = NSLOCTEXT("ZombiesEditor", "Reaction_StartPath", "Start path");
+	const FText Reaction_CancelPath = NSLOCTEXT("ZombiesEditor", "Reaction_CancelPath", "Cancel path");
+	const FText Reaction_CompletePath = NSLOCTEXT("ZombiesEditor", "Reaction_CompletePath", "Complete path");
+	const FText Reaction_Attack = NSLOCTEXT("ZombiesEditor", "Reaction_Attack", "Attack");
+	const FText Reaction_TakeStolenItems = NSLOCTEXT("ZombiesEditor", "Reaction_TakeStolenItems", "Take stolen items");
+	const FText Reaction_WarnAboutBreakingIn = NSLOCTEXT("ZombiesEditor", "Reaction_WarnAboutBreakingIn", "Warn about breaking in");
+	const FText Reaction_StartTimedEvent = NSLOCTEXT("ZombiesEditor", "Reaction_StartTimedEvent", "Start timed event");
+	const FText Reaction_SetCanTrade = NSLOCTEXT("ZombiesEditor", "Reaction_SetCanTrade", "Set can trade");
 	
 	const FText RootTag = NSLOCTEXT("ZombiesEditor", "RootTag", "Root tag");
 	const FText NPC = NSLOCTEXT("ZombiesEditor", "NPC", "NPC");

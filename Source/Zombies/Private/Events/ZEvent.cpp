@@ -227,5 +227,36 @@ FString FZEventReaction_WarnAboutBreakingIn::ToString() const
 	return TEXT("Warn about breaking in.");
 }
 
+void FZEventReaction_StartTimedEvent::Execute(const FZEventRow* EventRow, AZPlayerController* PC, AZNPCAIController* NPCAIController) const
+{
+	AZGameState* GS = PC ? PC->GetWorld()->GetGameState<AZGameState>() : nullptr;
+	if (ensure(GS))
+	{
+		GS->StartTimedEvent(TimedEvent, DurationHours, PC, NPCAIController);
+	}
+}
+
+FString FZEventReaction_StartTimedEvent::ToString() const
+{
+	return FString::Printf(TEXT("Start a timed event [%s] for %d hours"), *TimedEvent.ToString(), DurationHours);
+}
+
+void FZEventReaction_SetCanTrade::Execute(const FZEventRow* EventRow, AZPlayerController* PC, AZNPCAIController* NPCAIController) const
+{
+	NPCAIController->GetNPCharacter()->SetCanTrade(bCanTrade);
+}
+
+FString FZEventReaction_SetCanTrade::ToString() const
+{
+	if (bCanTrade)
+	{
+		return FString::Printf(TEXT("Enable trade."));
+	}
+	else
+	{
+		return FString::Printf(TEXT("Disable trade."));
+	}
+}
+
 
 

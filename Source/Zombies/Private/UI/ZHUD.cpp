@@ -38,6 +38,10 @@ void AZHUD::BeginPlay()
 	if (HUDWidgetClass)
 	{
 		HUDWidget = PushActivatableWidget<UZHUDWidget>(EZActivatableWidgetType::Game, HUDWidgetClass);
+		if (AZPlayerController* PC = Cast<AZPlayerController>(GetOwningPlayerController()))
+		{
+			PC->SetHUDWidget(HUDWidget);
+		}
 	}
 
 	if (const AZPlayerController* PC = Cast<AZPlayerController>(GetOwningPlayerController()))

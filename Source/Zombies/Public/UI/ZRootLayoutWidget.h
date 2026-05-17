@@ -26,7 +26,7 @@ UCLASS(Abstract)
 class ZOMBIES_API UZRootLayoutWidget : public UUserWidget
 {
 	GENERATED_BODY()
-	
+
 public:
 	UZActivatableWidgetStack* GetWidgetStack(EZActivatableWidgetType WidgetType) const;
 

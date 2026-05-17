@@ -190,7 +190,7 @@ public:
 
 	virtual FGameplayTag GetDeathEvent() const { return FGameplayTag::EmptyTag; }
 
-	void SetMovementEnabled(bool bEnabled) { bMovementEnabled = bEnabled; }
+	void SetMovementEnabled(bool bEnabled);
 
 	USkeletalMeshComponent* GetMesh() const { return MeshComponent; }
 	UCapsuleComponent* GetCapsuleComponent() const { return CapsuleComponent; }

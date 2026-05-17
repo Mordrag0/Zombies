@@ -55,6 +55,6 @@ public:
 
 	bool RequiresObjective(FGameplayTag Event) const;
 
-	bool AreAllObjectivesCompleted(const FGameplayTagContainer& CompletedEvents) const;
+	bool AreAllObjectivesCompleted(const TSet<FGameplayTag>& CompletedEvents) const;
 };
 

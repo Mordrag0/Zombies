@@ -17,11 +17,14 @@ DECLARE_LOG_CATEGORY_EXTERN(LogZEventEditor, Log, All);
 class SGameplayTagCombo;
 class SZGameplayTagPickerButton;
 
+UENUM()
 enum class EZEventType : uint8
 {
     Regular,
     Dialogue,
-    Simple
+    Simple,
+    Timed,
+	MAX
 };
 
 enum class EZEditEventType : uint8
@@ -50,16 +53,12 @@ enum class EZEventReactionType : uint8
 };
 
 USTRUCT()
-struct FZEventDataTable
+struct FZEventTypeData
 {
 	GENERATED_BODY()
 	
-	FZEventDataTable();
-	FZEventDataTable(UDataTable* InEventTable, EZEventType InType, const FGameplayTagContainer& InEvents);
-	
 	UPROPERTY()
-	TObjectPtr<UDataTable> EventTable;
-	EZEventType Type;
+	TMap<TObjectPtr<UDataTable>, FGameplayTagContainer> EventTables;
 	FGameplayTagContainer Events;
 };
 
@@ -71,8 +70,10 @@ struct FZNewEvent
 	void Reset();
 	FGameplayTag RootTag = FGameplayTag::EmptyTag;
 	FText TagName = FText::GetEmpty();
+	EZEventType Type = EZEventType::Simple;
 	
-	FZEventDataTable Table = FZEventDataTable();
+	UPROPERTY()
+	TObjectPtr<UDataTable> DataTable = nullptr;
 };
 
 struct FZEventConditionData
@@ -117,13 +118,15 @@ private:
 	TSharedRef<SWidget> BuildEditableEnumWidget(TEnum& EnumValue, EZEditEventType Type);
 	
 	TSharedRef<SWidget> BuildRemoveReactionButton(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
-    TSharedRef<SWidget>  BuildEditableEventReactionWidget_ReceiveItem(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
-    TSharedRef<SWidget>  BuildEditableEventReactionWidget_GiveItem(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
-    TSharedRef<SWidget>  BuildEditableEventReactionWidget_GainXP(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
-    TSharedRef<SWidget>  BuildEditableEventReactionWidget_Reputation(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
-    TSharedRef<SWidget>  BuildEditableEventReactionWidget_HomeTransform(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
-    TSharedRef<SWidget>  BuildEditableEventReactionWidget_StartPath(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
-    TSharedRef<SWidget>  BuildEditableEventReactionWidget_CancelPath(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_ReceiveItem(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_GiveItem(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_GainXP(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_Reputation(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_HomeTransform(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_StartPath(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_CancelPath(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_StartTimedEvent(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
+    TSharedRef<SWidget> BuildEditableEventReactionWidget_SetCanTrade(TSharedPtr<FInstancedStruct> Reaction, EZEventReactionType Type);
     TSharedRef<SWidget> CreateReactionTypeVBox(EZEventReactionType Type);
     TSharedRef<SWidget> BuildEditableEventReactionsWidget(EZEventReactionType Type);
 	TArray<TSharedPtr<FInstancedStruct>>& GetEventReactionList(EZEventReactionType Type);
@@ -143,14 +146,14 @@ private:
     TArray<TArray<FGameplayTag>> CreateRequiredDependencyChains(FGameplayTag From, FGameplayTag Current, FGameplayTag To) const;
     TArray<TArray<FGameplayTag>> CreateBlockedDependencyChains(FGameplayTag From, FGameplayTag To) const;
     TSharedRef<SWidget> BuildPreview(FGameplayTag Target);
-    TSharedRef<SWidget> GetSelectedDataTableWidget() const;
-    TSharedRef<SWidget> GetDataTableWidget(const FZEventDataTable& Item) const;
 	void UpdateNewEventWarning();
-    TSharedRef<SWidget> BuildEventTableComboBox();
-	void RefreshFilteredDataTables(FGameplayTag SelectedTag);
+    TSharedRef<SWidget> BuildEventTypeComboBox();
+	void RefreshFilteredEventTypes();
+    TSharedRef<SWidget> BuildDataTableComboBox();
+	void RefreshFilteredDataTables();
 	TSharedRef<SWidget> BuildInsertEventTagWidget();
 	TSharedRef<SWidget> BuildInsertEventWidget();
-	void LoadEvent(FZEventRow* EventRow, EZEventType Type);
+	void LoadRegularEvent(FZEventRow* EventRow, EZEventType Type);
     void LoadEvents();
     
 	bool MatchesFilterWords(FGameplayTag EventTag, const TArray<FString> FilterWords) const;
@@ -212,27 +215,25 @@ private:
 	void OnDialogueEdited();
 	void OnDialogueConditionEdited(TSharedPtr<FInstancedStruct> Condition);
 	FReply InsertEvent();
-	void DeleteTag(FGameplayTag TagToDelete);
+	TArray<TSharedPtr<FGameplayTagNode>> GetChildNodes(TSharedPtr<FGameplayTagNode> Node) const;
+	void DeleteTags(const FGameplayTagContainer& TagsToDelete);
 	FReply RemoveEvent();
 	
 	FZEventRow* GetEventRow(FGameplayTag EventID);
 	UDataTable* GetDataTable(FGameplayTag EventID);
 	
+	TSharedRef<SWidget> BuildRemoveTagsWidget();
 	void ValidateAll();
 	void Validate(FGameplayTag Event);
 	
-    // All events cached on construction
-    FGameplayTagContainer AllRegularEvents;
-    // All dialogue options cached on construction
-    FGameplayTagContainer AllDialogueOptions;
-    // All simple events cached on construction
-    FGameplayTagContainer AllSimpleEvents;
     // Filtered subset shown in the list
     TArray<TSharedPtr<FGameplayTag>> FilteredEvents;
     // Filtered subset shown in the list
     TArray<TSharedPtr<FGameplayTag>> FilteredDialogueOptions;
     // Filtered subset shown in the list
     TArray<TSharedPtr<FGameplayTag>> FilteredSimpleEvents;
+    // Filtered subset shown in the list
+    TArray<TSharedPtr<FGameplayTag>> FilteredTimedEvents;
 
 	// All Events and their related events
 	TMap<EZEventRelation, TMap<FGameplayTag, FGameplayTagContainer>> RelatedEvents;
@@ -246,6 +247,7 @@ private:
     TSharedPtr<SListView<TSharedPtr<FGameplayTag>>> EventListView;
     TSharedPtr<SListView<TSharedPtr<FGameplayTag>>> DialogueOptionListView;
     TSharedPtr<SListView<TSharedPtr<FGameplayTag>>> SimpleEventListView;
+    TSharedPtr<SListView<TSharedPtr<FGameplayTag>>> TimedEventListView;
 	TSharedPtr<SSearchBox> SearchBox;
 	TSharedPtr<SButton> InsertButton;
 	TSharedPtr<SButton> EditButton;
@@ -253,7 +255,8 @@ private:
 	TSharedPtr<SButton> RevertButton;
 	TSharedPtr<SButton> SaveButton;
 	TSharedPtr<STextBlock> InsertWidgetWarningText;
-	TSharedPtr<SComboBox<TSharedPtr<FZEventDataTable>>> EventTableComboBox;
+	TSharedPtr<SComboBox<TSharedPtr<EZEventType>>> EventTypeComboBox;
+	TSharedPtr<SComboBox<TWeakObjectPtr<UDataTable>>> DataTableComboBox;
 	TSharedPtr<SListView<TSharedPtr<FInstancedStruct>>> EventConditionListView;
 	TSharedPtr<SListView<TSharedPtr<FInstancedStruct>>> EventOnAvailableReactionListView;
 	TSharedPtr<SListView<TSharedPtr<FInstancedStruct>>> EventOnUnavailableReactionListView;
@@ -279,10 +282,11 @@ private:
 	FGameplayTag NewEventRootTag;
 	FText NewEventText;
 	FText NewEventComment;
-
-    // Cached table data
-	TArray<FZEventDataTable> DataTables;
-	TArray<TSharedPtr<FZEventDataTable>> FilteredDataTables;
+	FGameplayTagContainer TagsToRemove;
+	
+	TMap<EZEventType, FZEventTypeData> EventTypes;
+	TArray<TSharedPtr<EZEventType>> FilteredEventTypes;
+	TArray<TWeakObjectPtr<UDataTable>> FilteredDataTables;
     TMap<FGameplayTag, FZEventRow*> EventsMap;
     TMap<FGameplayTag, FZDialogueOptionRow*> DialogueOptionsMap;
 	

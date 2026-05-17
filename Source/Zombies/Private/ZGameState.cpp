@@ -21,6 +21,7 @@
 #include "AI/ZStateTreePayloads.h"
 #include "UI/ZText.h"
 #include "ZLog.h"
+#include "Settings/ZGameSettings.h"
 
 ETeamAttitude::Type FZFactionReputation::GetAttitudeTowardsPlayer() const
 {
@@ -41,7 +42,7 @@ AZGameState::AZGameState()
 void AZGameState::CompleteEvent(FGameplayTag Event, AZCharacter* Character, AController* EventInstigator)
 {
 	ensure(HasAuthority());
-	ensure(!CompletedEvents.HasTagExact(Event));
+	ensure(!CompletedEvents.Contains(Event));
 	ensure(EventInstigator);
 	const FZDialogueOptionRow* Row = GetDialogueOption(Event);
 	if (Row && Row->bRepeatable) // Row->NPC might be a group
@@ -56,8 +57,11 @@ void AZGameState::CompleteEvent(FGameplayTag Event, AZCharacter* Character, ACon
 	}
 	else
 	{
-		CompletedEvents.AddTag(Event);
-		MARK_PROPERTY_DIRTY_FROM_NAME(ThisClass, CompletedEvents, this);
+		if (ZGameplayTags::IsCompletingTimedEvent(Event))
+		{
+			RemoveTimedEvent(Event.RequestDirectParent());
+		}
+		CompletedEvents.Add(Event);
 		UpdateAvailableEvents(Event, EventInstigator);
 		UpdateQuests(Event);
 	}
@@ -145,7 +149,6 @@ void AZGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
     FDoRepLifetimeParams Params;
     Params.bIsPushBased = true;
 
-    DOREPLIFETIME_WITH_PARAMS_FAST(ThisClass, CompletedEvents, Params);
     DOREPLIFETIME_WITH_PARAMS_FAST(ThisClass, CompletedQuests, Params);
     DOREPLIFETIME_WITH_PARAMS_FAST(ThisClass, OpenedQuests, Params);
     DOREPLIFETIME_WITH_PARAMS_FAST(ThisClass, FailedQuests, Params);
@@ -174,6 +177,49 @@ const FZDialogueOptionRow* AZGameState::GetDialogueOption(FGameplayTag EventID) 
 		}
 	}
 	return nullptr;
+}
+
+void AZGameState::StartTimedEvent(FGameplayTag TimedEvent, int32 DurationHours, AZPlayerController* EventInstigator, AZNPCAIController* NPCAIController)
+{
+#if !UE_BUILD_SHIPPING
+	for (const TPair<int32, FZTimedEventContextArray>& Pair : ActiveTimedEvents)
+	{
+		ensureMsgf(Pair.Value.EventContexts.IndexOfByPredicate([TimedEvent](const FZTimedEventContext& TimedEventContext)
+		{
+			return TimedEventContext.TimedEventTag == TimedEvent;
+		}) == INDEX_NONE, TEXT("Tried to add the same timed event twice."));
+	}
+#endif
+	const int32 TotalHour = GetTotalHour();
+	ActiveTimedEvents.FindOrAdd(TotalHour + DurationHours).EventContexts.Add(FZTimedEventContext(TimedEvent, NPCAIController, EventInstigator));
+}
+
+void AZGameState::RemoveTimedEvent(FGameplayTag CompletedTimedEvent)
+{
+	const FGameplayTag TimedEvent = CompletedTimedEvent.RequestDirectParent();
+	if (TimedEvent.IsValid())
+	{
+		int32 KeyToRemove = INDEX_NONE;
+		for (TPair<int32, FZTimedEventContextArray>& Pair : ActiveTimedEvents)
+		{
+			Pair.Value.EventContexts.RemoveAll([TimedEvent](const FZTimedEventContext& TimedEventContext)
+			{
+				return TimedEventContext.TimedEventTag == TimedEvent;
+			});
+			if (Pair.Value.EventContexts.IsEmpty())
+			{
+				KeyToRemove = Pair.Key;
+			}
+		}
+		if (KeyToRemove != INDEX_NONE)
+		{
+			ActiveTimedEvents.Remove(KeyToRemove);
+		}
+	}
+	else
+	{
+		UE_LOG(LogZGame, Error, TEXT("Trying to remove invalid timed event: %s"), *CompletedTimedEvent.ToString());
+	}
 }
 
 AZPath* AZGameState::GetPath(FGameplayTag PathTag) const
@@ -281,7 +327,7 @@ void AZGameState::SetTimeOfDay(float Time)
 
 void AZGameState::HandleBeginPlay()
 {
-	Init();
+	Init(); // Init game state before everything else
 
 	Super::HandleBeginPlay();
 }
@@ -294,7 +340,25 @@ void AZGameState::Init()
 
 	for (int32 Idx = 0; Idx < static_cast<uint8>(EZDialogueContext::MAX); ++Idx)
 	{
-		DialogueOptions.Add(static_cast<EZDialogueContext>(Idx), TMap<FGameplayTag, const FZDialogueOptionRow*>());
+		DialogueOptions.Emplace(static_cast<EZDialogueContext>(Idx), TMap<FGameplayTag, const FZDialogueOptionRow*>());
+	}
+	if (ensure(EventsDataTable))
+	{
+		TArray<const FZEventRow*> AllEvents;
+		EventsDataTable->GetAllRows(TEXT("AZGameState::BeginPlay"), AllEvents);
+		for (const FZEventRow* Event : AllEvents)
+		{
+			AllOneTimeEvents.Add(Event->ID, Event);
+			AllPossibleEvents.Add(Event->ID);
+			for (const FGameplayTag RequiredEvent : Event->RequiredEvents)
+			{
+				RequiredByEvents.FindOrAdd(RequiredEvent).AddTag(Event->ID);
+			}
+			for (const FGameplayTag BlockedByEvent : Event->BlockedByEvents)
+			{
+				BlockedEvents.FindOrAdd(BlockedByEvent).AddTag(Event->ID);
+			}
+		}
 	}
 	if (ensure(DialogueDataTables.Num() > 0))
 	{
@@ -316,17 +380,17 @@ void AZGameState::Init()
 				if (!DialogueOption->bRepeatable)
 				{
 					AllOneTimeEvents.Add(DialogueOption->ID, DialogueOption);
+					AllPossibleEvents.Add(DialogueOption->ID);
+				}
+				for (const FGameplayTag RequiredEvent : DialogueOption->RequiredEvents)
+				{
+					RequiredByEvents.FindOrAdd(RequiredEvent).AddTag(DialogueOption->ID);
+				}
+				for (const FGameplayTag BlockedByEvent : DialogueOption->BlockedByEvents)
+				{
+					BlockedEvents.FindOrAdd(BlockedByEvent).AddTag(DialogueOption->ID);
 				}
 			}
-		}
-	}
-	if (ensure(EventsDataTable))
-	{
-		TArray<const FZEventRow*> AllEvents;
-		EventsDataTable->GetAllRows(TEXT("AZGameState::BeginPlay"), AllEvents);
-		for (const FZEventRow* Event : AllEvents)
-		{
-			AllOneTimeEvents.Add(Event->ID, Event);
 		}
 	}
 
@@ -384,6 +448,8 @@ void AZGameState::Init()
 
 	ValidateEvents();
 	bInitialized = true;
+	
+	NorthOffset = UZGameSettings::Get()->CompassNorthOffset;
 }
 
 void AZGameState::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -398,34 +464,30 @@ void AZGameState::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 bool AZGameState::IsOptionAvailable(const FZEventRow& Row, const FGameplayTagContainer& CompletedContextEvents) const
 {
-	if (CompletedEvents.HasTagExact(Row.ID) || CompletedContextEvents.HasTagExact(Row.ID))
+	if (CompletedEvents.Contains(Row.ID) || CompletedContextEvents.HasTagExact(Row.ID)) // Is not completed yet
 	{
 		return false;
 	}
 
-	for (const FGameplayTag& RequiredEvent : Row.RequiredEvents)
+	for (const FGameplayTag& RequiredEvent : Row.RequiredEvents) // If all required events completed
 	{
-		if (!CompletedEvents.HasTagExact(RequiredEvent) && !CompletedContextEvents.HasTag(RequiredEvent))
+		if (!CompletedEvents.Contains(RequiredEvent) && !CompletedContextEvents.HasTag(RequiredEvent))
 		{
 			return false;
 		}
 	}
-
-	if (CompletedEvents.HasAnyExact(Row.BlockedEvents) || CompletedContextEvents.HasAnyExact(Row.BlockedEvents))
+	// If none of the events that row is blocked by are completed
+	if (UZGameplayStatics::HasAnyExact(CompletedEvents, Row.BlockedByEvents) || CompletedContextEvents.HasAnyExact(Row.BlockedByEvents))
 	{
 		return false;
 	}
+	
 	return true;
 }
 
 bool AZGameState::IsDialogueOptionAvailable(const FZDialogueOptionRow& Row, const AZNPCharacter* NPC) const
 {
 	// Skip calling IsOptionAvailable since we know that it will return true because the dialogue option is in AvailableEvents
-	/*if (!IsOptionAvailable(Row))
-	{
-		return false;
-	}*/
-
 	if (NPC)
 	{
 		if (Row.IsNPCInitiated())
@@ -455,7 +517,7 @@ bool AZGameState::AreDialogueOptionConditionsMet(const FZDialogueOptionRow& Row,
 {
 	for (const TInstancedStruct<FZEventCondition>& Condition : Row.Conditions)
 	{
-		if (!Condition.Get().IsMet(PC))
+		if (!Condition->IsMet(PC))
 		{
 			return false;
 		}
@@ -469,7 +531,7 @@ void AZGameState::InitAvailableEvents()
 	{
 		if (Event.Value->RequiredEvents.Num() == 0)
 		{
-			AvailableEvents.AddTag(Event.Key);
+			AvailableEvents.Add(Event.Key);
 		}
 	}
 }
@@ -477,47 +539,53 @@ void AZGameState::InitAvailableEvents()
 void AZGameState::UpdateAvailableEvents(FGameplayTag CompletedEvent, AController* EventInstigator)
 {
 	ensure(HasAuthority());
-	AvailableEvents.RemoveTag(CompletedEvent);
+	AllPossibleEvents.Remove(CompletedEvent);
+	AvailableEvents.Remove(CompletedEvent);
 
-	// Loop through available events and find those that just became unavailable
+	// Find events that just became unavailable
 	FGameplayTagContainer NewlyUnavailableEvents;
-	for (const FGameplayTag& AvailableEvent : AvailableEvents) 
+	if (const FGameplayTagContainer* EventsThatCompletedEventBlocks = BlockedEvents.Find(CompletedEvent))
 	{
-		const FZEventRow* AvailableEventRow = AllOneTimeEvents.FindRef(AvailableEvent);
-		if (AvailableEventRow->BlockedEvents.HasTagExact(CompletedEvent))
-		{
-			NewlyUnavailableEvents.AddTag(AvailableEvent);
-		}
+		NewlyUnavailableEvents = UZGameplayStatics::FilterExact(AvailableEvents, *EventsThatCompletedEventBlocks);
+		UZGameplayStatics::RemoveAll(AvailableEvents, NewlyUnavailableEvents);
+		UZGameplayStatics::RemoveAll(AllPossibleEvents, *EventsThatCompletedEventBlocks); // Remove all blocked events even if they're not currently available
 	}
 
-	// Loop through all events and find those that just became available
+	// Find events that just became available
 	FGameplayTagContainer NewlyAvailableEvents;
-	for (const TPair<FGameplayTag, const FZEventRow*>& EventRow : AllOneTimeEvents)
+	if (const FGameplayTagContainer* EventsThatRequireCompletedEvent = RequiredByEvents.Find(CompletedEvent))  // Get events that CompletedEvent is required by
 	{
-		if (CompletedEvents.HasTagExact(EventRow.Key) || AvailableEvents.HasTagExact(EventRow.Key))
+		for (const FGameplayTag EventThatRequiresCompletedEvent : *EventsThatRequireCompletedEvent)
 		{
-			continue;
-		}
-		if (!EventRow.Value->RequiredEvents.HasTagExact(CompletedEvent))
-		{
-			continue;
-		}
-		if (IsOptionAvailable(*EventRow.Value, FGameplayTagContainer()))
-		{
-			NewlyAvailableEvents.AddTag(EventRow.Key);
+			if (AllPossibleEvents.Contains(EventThatRequiresCompletedEvent))
+			{
+				const FZEventRow* NewlyAvailableEventCandidateRow = AllOneTimeEvents[EventThatRequiresCompletedEvent];
+				if (UZGameplayStatics::HasAllExact(CompletedEvents, NewlyAvailableEventCandidateRow->RequiredEvents)) // All required events completed
+				{
+					if (const FGameplayTagContainer* NewlyAvailableEventCandidateBlockedEvents = BlockedEvents.Find(EventThatRequiresCompletedEvent))
+					{
+						if (!UZGameplayStatics::HasAnyExact(CompletedEvents, *NewlyAvailableEventCandidateBlockedEvents))
+						{
+							NewlyAvailableEvents.AddTag(EventThatRequiresCompletedEvent); // No blocked events completed
+						}
+					}
+					else
+					{
+						NewlyAvailableEvents.AddTag(EventThatRequiresCompletedEvent); // No blocked events
+					}
+				}
+			}
 		}
 	}
-	AvailableEvents.RemoveTags(NewlyUnavailableEvents);
-	AvailableEvents.AppendTags(NewlyAvailableEvents);
-
+	UZGameplayStatics::Append(AvailableEvents, NewlyAvailableEvents);
+	
 	OnEventCompleted(CompletedEvent, NewlyAvailableEvents, NewlyUnavailableEvents, EventInstigator);
 }
 
 void AZGameState::OnEventCompleted(FGameplayTag CompletedEvent, const FGameplayTagContainer& NewlyAvailableEvents, const FGameplayTagContainer& NewlyUnavailableEvents, AController* EventInstigator)
 {
 	AZPlayerController* PlayerEventInstigator = Cast<AZPlayerController>(EventInstigator);
-	const FZEventRow* CompletedEventRow = AllOneTimeEvents.FindRef(CompletedEvent);
-	if (ensure(CompletedEventRow))
+	if (const FZEventRow* CompletedEventRow = AllOneTimeEvents.FindRef(CompletedEvent))
 	{
 		TObjectPtr<AZNPCAIController>* NPCAIController = NPCAIControllers.Find(CompletedEventRow->NPC);
 		if (ensure(NPCAIController))
@@ -696,7 +764,7 @@ FRotator AZGameState::CalculateSunAngle(float InTimeOfDay, float InLatitude, flo
 	const float Azimuth = FMath::RadiansToDegrees(FMath::Atan2(SinAzimuth, CosAzimuth));
 	// Convert altitude and azimuth to directional light pitch and yaw
 	const float Pitch = -FMath::RadiansToDegrees(Altitude);
-	const float Yaw = Azimuth + 90.f;
+	const float Yaw = Azimuth + NorthOffset;
 
 	return FRotator(Pitch, Yaw, 0.f);
 }
@@ -707,17 +775,46 @@ void AZGameState::UpdateHour()
 	Hour = FMath::FloorToInt(TimeOfDay);
 	if (PreviousHour != Hour)
 	{
-		HandleHourChanged();
+		HandleHourChanged(PreviousHour);
 	}
 }
 
-void AZGameState::HandleHourChanged()
+void AZGameState::HandleHourChanged(int32 PreviousHour)
 {
-	for (const TPair<FGameplayTag, AZNPCAIController*>& KVP : NPCAIControllers)
+	for (int32 Idx = PreviousHour + 1; Idx <= Hour; Idx++)
+	{
+		FZTimedEventContextArray NewlyExpiredEvents;
+		if (ActiveTimedEvents.RemoveAndCopyValue(Idx, NewlyExpiredEvents))
+		{
+			for (const FZTimedEventContext& NewlyExpiredTimedEvent : NewlyExpiredEvents.EventContexts)
+			{
+				OnTimedEventExpired(NewlyExpiredTimedEvent);
+			}
+		}
+	}
+	for (const TPair<FGameplayTag, TObjectPtr<AZNPCAIController>>& KVP : NPCAIControllers)
 	{
 		//const FInstancedStruct Payload = FInstancedStruct::Make(FZHourChangedPayload(Hour, KVP.Value->GetCachedDesiredActivity()));
 		//KVP.Value->SendStateTreeEvent(ZGameplayTags::AI_Time_HourChanged, Payload);
 		KVP.Value->HandleHourChanged(Hour);
+	}
+}
+
+int32 AZGameState::GetTotalHour() const
+{
+	return Day * 24 + Hour;
+}
+
+void AZGameState::OnTimedEventExpired(const FZTimedEventContext& ExpiredTimedEvent)
+{
+	const FGameplayTag ExpiredTimedEventExpiredId = ZGameplayTags::GetFullTag(ExpiredTimedEvent.TimedEventTag, ZGameplayTags::TimedEventExpiredLeafName);
+	if (ExpiredTimedEventExpiredId.IsValid())
+	{
+		CompleteEvent(ExpiredTimedEventExpiredId, ExpiredTimedEvent.NPCAIController->GetNPCharacter(), ExpiredTimedEvent.EventInstigator);
+	}
+	else
+	{
+		UE_LOG(LogZGame, Error, TEXT("Failed to find expired tag for timed event %s"), *ExpiredTimedEvent.TimedEventTag.ToString());
 	}
 }
 

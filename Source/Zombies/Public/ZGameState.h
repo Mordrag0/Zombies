@@ -62,6 +62,29 @@ struct FZFactionPair
     EZFaction FactionB = EZFaction::NoFaction;
 };
 
+USTRUCT()
+struct FZTimedEventContext
+{
+	GENERATED_BODY()
+	
+	FGameplayTag TimedEventTag = FGameplayTag::EmptyTag;
+	
+	UPROPERTY()
+	AZNPCAIController* NPCAIController = nullptr;
+	
+	UPROPERTY()
+	AZPlayerController* EventInstigator = nullptr;
+};
+
+USTRUCT()
+struct FZTimedEventContextArray
+{
+    GENERATED_BODY()
+	
+	UPROPERTY()
+	TArray<FZTimedEventContext> EventContexts;
+};
+
 /**
  * 
  */
@@ -85,6 +108,10 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 
 	const FZDialogueOptionRow* GetDialogueOption(FGameplayTag EventID) const;
+	
+	void StartTimedEvent(FGameplayTag TimedEvent, int32 DurationHours, AZPlayerController* EventInstigator, AZNPCAIController* NPCAIController);
+	
+	void RemoveTimedEvent(FGameplayTag CompletedTimedEvent);
 
 	AZWaypoint* GetWaypoint(FGameplayTag WaypointTag) const;
 
@@ -169,13 +196,20 @@ protected:
 
 	void UpdateHour();
 
-	void HandleHourChanged();
+	void HandleHourChanged(int32 PreviousHour);
+	
+	int32 GetTotalHour() const;
+	
+	void OnTimedEventExpired(const FZTimedEventContext& ExpiredTimedEvent);
 
 	void ValidateEvents();
 	
 	TMap<FGameplayTag, const FZEventRow*> AllOneTimeEvents;
 
 	TMap<EZDialogueContext, TMap<FGameplayTag, const FZDialogueOptionRow*>> DialogueOptions;
+	
+	TMap<FGameplayTag, FGameplayTagContainer> RequiredByEvents; // Key: event id, Value: Events that are required by key
+	TMap<FGameplayTag, FGameplayTagContainer> BlockedEvents; // Key: event id, Value: Events that the key blocks
 
 	TMap<FGameplayTag, const FZQuestRow*> Quests;
 	
@@ -190,10 +224,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "ZEvents")
 	TObjectPtr<UDataTable> QuestDataTable;
 
-	UPROPERTY(Replicated)
-	FGameplayTagContainer CompletedEvents;
-
-	FGameplayTagContainer AvailableEvents;
+	TSet<FGameplayTag> CompletedEvents;
+	TSet<FGameplayTag> AllPossibleEvents;
+	TSet<FGameplayTag> AvailableEvents;
 
 	UPROPERTY(Replicated)
 	FGameplayTagContainer CompletedQuests;
@@ -260,6 +293,11 @@ protected:
 	float Latitude; // Degrees, 0 = equator, 90 = north pole
 
 	bool bInitialized;
+	
+	float NorthOffset;
+	
+	UPROPERTY()
+	TMap<int32, FZTimedEventContextArray> ActiveTimedEvents;
 
 	friend class UZSaveSubsystem;
 };

@@ -9,6 +9,7 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(NPC, "NPC")
 	UE_DEFINE_GAMEPLAY_TAG(Event_Dialogue, "Event.Dialogue")
 	UE_DEFINE_GAMEPLAY_TAG(Event_Repeatable, "Event.Repeatable")
+	UE_DEFINE_GAMEPLAY_TAG(Event_Timed, "Event.Timed")
 	UE_DEFINE_GAMEPLAY_TAG(Waypoint, "Waypoint")
 	UE_DEFINE_GAMEPLAY_TAG(Path, "Path")
 	UE_DEFINE_GAMEPLAY_TAG(AI_Combat_TargetSet, "AI.Combat.TargetSet")
@@ -28,5 +29,33 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(AI_TeleportSucceeded, "AI.TeleportSucceeded")
 	UE_DEFINE_GAMEPLAY_TAG(AI_TeleportFailed, "AI.TeleportFailed")
 	UE_DEFINE_GAMEPLAY_TAG(AI_HomeTransformChanged, "AI.HomeTransformChanged")
+	
+	const FName TimedEventCompletedLeafName = FName("Completed");
+	const FName TimedEventExpiredLeafName = FName("Expired");
+	
+	FGameplayTag GetFullTag(FGameplayTag ParentTag, const FName& LeafName)
+	{
+		const UGameplayTagsManager& TagsManager = UGameplayTagsManager::Get();
+		const TSharedPtr<FGameplayTagNode> ParentNode = TagsManager.FindTagNode(ParentTag);
+		if (!ParentNode.IsValid())
+		{
+			return FGameplayTag::EmptyTag;
+		}
+		const TSharedPtr<FGameplayTagNode>* ChildTagNode = ParentNode->GetChildTagNodes().FindByPredicate([LeafName](const TSharedPtr<FGameplayTagNode>& ChildNode)
+		{
+			return ChildNode->GetSimpleTagName() == LeafName;
+		});
+		return (ChildTagNode && ChildTagNode->IsValid()) ? (*ChildTagNode)->GetCompleteTag() : FGameplayTag::EmptyTag;
+	}
+
+	bool ZGameplayTags::IsCompletingTimedEvent(FGameplayTag Tag)
+	{
+		TSharedPtr<FGameplayTagNode> TagNode = UGameplayTagsManager::Get().FindTagNode(Tag);
+		if (!TagNode.IsValid())
+		{
+			return false;
+		}
+		return Tag.MatchesTag(Event_Timed) && (TagNode->GetSimpleTagName() == TimedEventCompletedLeafName);
+	}
 }
 

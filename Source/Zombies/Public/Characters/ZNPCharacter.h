@@ -130,6 +130,8 @@ public:
 	int32 GetSleepStartTime() const {return SleepStartTime; }
 	int32 GetSleepEndTime() const { return SleepEndTime; }
 
+	void SetCanTrade(bool bInCanTrade);
+	
 protected:
 	virtual void Die(AController* DeathInstigator) override;
 	
@@ -143,7 +145,7 @@ protected:
 	FGameplayTag Name;
 
 	UPROPERTY(EditDefaultsOnly)
-	bool bCanTrade;
+	bool bCanTrade; // #ZTODO serialize
 
 	UPROPERTY(EditDefaultsOnly)
 	bool bCanDie;

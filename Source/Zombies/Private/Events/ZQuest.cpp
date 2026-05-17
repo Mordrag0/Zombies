@@ -12,11 +12,11 @@ bool FZQuestRow::RequiresObjective(FGameplayTag Event) const
     });
 }
 
-bool FZQuestRow::AreAllObjectivesCompleted(const FGameplayTagContainer& CompletedEvents) const
+bool FZQuestRow::AreAllObjectivesCompleted(const TSet<FGameplayTag>& CompletedEvents) const
 {
 	for (const FZQuestObjective& Objective : Objectives)
 	{
-		if (!CompletedEvents.HasTagExact(Objective.RequiredEvent))
+		if (!CompletedEvents.Contains(Objective.RequiredEvent))
 		{
 			return false;
 		}

@@ -5,9 +5,11 @@
 #include "CoreMinimal.h"
 #include "Characters/ZCharacter.h"
 #include "GameplayTagContainer.h"
+#include "ZDelegateConnection.h"
 #include "Net/Serialization/FastArraySerializer.h"
 #include "ZFPCharacter.generated.h"
 
+class UZGameUserSettings;
 struct FZInteractionStateArray;
 class USpringArmComponent;
 class UCameraComponent;
@@ -63,11 +65,12 @@ UCLASS()
 class ZOMBIES_API AZFPCharacter : public AZCharacter
 {
 	GENERATED_BODY()
-	
+
 public:
 	AZFPCharacter();
 	
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	
 	virtual void ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult) override;
 	
@@ -170,6 +173,10 @@ protected:
 	void OnSwitchShoulder() const;
 	
 	float GetInteractionTraceDistance() const;
+	
+	void LoadGameUserSettings(const UZGameUserSettings& Settings);
+	
+	FZDelegateConnection SettingsConnection;
 
 	float FOVSensAdjustment;
 	

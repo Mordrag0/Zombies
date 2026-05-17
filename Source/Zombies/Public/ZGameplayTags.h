@@ -11,6 +11,7 @@ namespace ZGameplayTags
     ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(NPC)
     ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Dialogue)
     ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Repeatable)
+    ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Timed)
     ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Waypoint)
     ZOMBIES_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Path)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Combat_TargetSet)
@@ -30,5 +31,11 @@ namespace ZGameplayTags
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_TeleportSucceeded)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_TeleportFailed)
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_HomeTransformChanged)
+
+    ZOMBIES_API extern const FName TimedEventCompletedLeafName;
+    ZOMBIES_API extern const FName TimedEventExpiredLeafName;
+    
+    ZOMBIES_API extern FGameplayTag GetFullTag(FGameplayTag ParentTag, const FName& LeafName);
+    bool IsCompletingTimedEvent(FGameplayTag Tag);
 };
 

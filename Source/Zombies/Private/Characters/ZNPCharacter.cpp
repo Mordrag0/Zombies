@@ -417,6 +417,11 @@ void AZNPCharacter::BeginPlay()
 	ensure(Name.IsValid());
 }
 
+void AZNPCharacter::SetCanTrade(bool bInCanTrade)
+{
+	bCanTrade = bInCanTrade;
+}
+
 void AZNPCharacter::Die(AController* DeathInstigator)
 {
 	if (bCanDie)

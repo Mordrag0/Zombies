@@ -24,6 +24,7 @@
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "MoveLibrary/BasedMovementUtils.h"
+#include "Settings/ZGameUserSettings.h"
 
 void FZInteractionStateEntry::PostReplicatedAdd(const FZInteractionStateArray& InArraySerializer)
 {
@@ -138,11 +139,8 @@ void AZFPCharacter::Tick(float DeltaTime)
 	if (IsLocallyControlled())
 	{
 		// Spin camera based on input
-		if (AZPlayerController* PC = GetController<AZPlayerController>())
-		{
-			AddControllerYawInput(CachedLookInput.Yaw * HorizontalSensitivity * FOVSensAdjustment);
-			AddControllerPitchInput(CachedLookInput.Pitch * VerticalSensitivity * FOVSensAdjustment);
-		}
+		AddControllerYawInput(CachedLookInput.Yaw * HorizontalSensitivity * FOVSensAdjustment);
+		AddControllerPitchInput(CachedLookInput.Pitch * VerticalSensitivity * FOVSensAdjustment);
 
 		// Clear all camera-related cached input
 		CachedLookInput = FRotator::ZeroRotator;
@@ -335,6 +333,12 @@ float AZFPCharacter::GetInteractionTraceDistance() const
 	return bFirstPerson ? FPPInteractionTraceDistance : TPPInteractionTraceDistance;
 }
 
+void AZFPCharacter::LoadGameUserSettings(const UZGameUserSettings& Settings)
+{
+	VerticalMouseSensitivity = Settings.GetVerticalMouseSensitivity();
+	HorizontalMouseSensitivity = Settings.GetHorizontalMouseSensitivity();
+}
+
 void AZFPCharacter::SetADSing(bool bVal)
 {
 	Super::SetADSing(bVal);
@@ -424,6 +428,15 @@ void AZFPCharacter::BeginPlay()
 		
 		PrimaryActorTick.SetTickFunctionEnable(false);
 	}
+	
+	UZGameUserSettings::BindAndLoad(this, &ThisClass::LoadGameUserSettings, SettingsConnection);
+}
+
+void AZFPCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
+	
+	SettingsConnection.Disconnect();
 }
 
 void AZFPCharacter::ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult)
@@ -468,7 +481,7 @@ void AZFPCharacter::ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdC
 		}
 		else
 		{
-			// set intent to the the control rotation - often a player's camera rotation
+			// set intent to the  control rotation - often a player's camera rotation
 			CharacterInputs.OrientationIntent = CharacterInputs.ControlRotation.Vector().GetSafeNormal();
 		}
 

@@ -22,18 +22,27 @@
 #include "AudioDevice.h"
 #include "ZGameInstance.h"
 #include "ZLog.h"
+#include "Cheats/ZCheatManager.h"
 #include "UI/ZHUD.h"
 #include "UI/ZText.h"
+#include "Cheats/ZCheatManager.h"
 
 #define LOCTEXT_NAMESPACE "Zombies"
 
 AZPlayerController::AZPlayerController()
 {
+	CheatClass = UZCheatManager::StaticClass();
+	
 	DeathFadeDuration = 3.f;
 
 	LockBlendTime = .5f;
 
 	CurrentInputMode = EZInputMode::None;
+}
+
+void AZPlayerController::SetHUDWidget(UZHUDWidget* InHUDWidget)
+{
+	HUDWidget = InHUDWidget;
 }
 
 void AZPlayerController::ToggleInventory()
@@ -339,7 +348,6 @@ void AZPlayerController::AcknowledgePossession(APawn* P)
 {
 	Super::AcknowledgePossession(P);
 
-	UE_LOG(LogTemp, Warning, TEXT("AcknowledgePossession"));
 	if (IsLocalPlayerController())
 	{
 		if (FPCharacter)
@@ -358,7 +366,6 @@ void AZPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
-	UE_LOG(LogTemp, Warning, TEXT("OnPossess"));
 	FPCharacter = Cast<AZFPCharacter>(InPawn);
 }
 
@@ -637,78 +644,6 @@ void AZPlayerController::Server_Reliable_UnlockLockpickTarget_Implementation(AZL
 	}
 	LockpickTarget->Unlock();
 }
-
-void AZPlayerController::SaveGame(const FString& SlotName)
-{
-	if (!HasAuthority())
-	{
-		return;
-	}
-	UZSaveSubsystem* SaveSubSystem = GetGameInstance()->GetSubsystem<UZSaveSubsystem>();
-	SaveSubSystem->SaveGame(SlotName);
-}
-
-void AZPlayerController::LoadGame(const FString& SlotName)
-{
-	if (!HasAuthority())
-	{
-		return;
-	}
-	UZSaveSubsystem* SaveSubSystem = GetGameInstance()->GetSubsystem<UZSaveSubsystem>();
-	SaveSubSystem->LoadGame(SlotName);
-}
-
-#if WITH_EDITOR || UE_BUILD_DEVELOPMENT
-
-void AZPlayerController::Slomo(float Value)
-{
-	UGameplayStatics::SetGlobalTimeDilation(this, Value);
-}
-
-void AZPlayerController::SetTimeOfDay(float Time)
-{
-	if (AZGameState* GS = GetWorld()->GetGameState<AZGameState>())
-	{ 
-		GS->SetTimeOfDay(Time);
-	}
-}
-
-void AZPlayerController::FreeXP(int32 XP)
-{
-	if (AZPlayerState* PS = GetPlayerState<AZPlayerState>())
-	{
-		PS->GetLevelingComponent()->AddXP(XP);
-	}
-}
-
-void AZPlayerController::SetVolume(float Volume)
-{
-	if (FAudioDevice* AudioDevice = GEngine->GetMainAudioDeviceRaw())
-    {
-        AudioDevice->SetTransientPrimaryVolume(Volume);
-    }
-}
-
-void AZPlayerController::ChangeReputation(int32 Faction, float ReputationChange)
-{
-	if (AZGameState* GS = GetWorld()->GetGameState<AZGameState>())
-	{
-		if (UEnum* EnumClass = StaticEnum<EZFaction>())
-		{
-			if (EnumClass->IsValidEnumValue(Faction))
-			{
-				const EZFaction ValidFaction = static_cast<EZFaction>(Faction);
-				GS->ChangeReputation(static_cast<EZFaction>(ValidFaction), ReputationChange);
-			}
-			else
-			{
-				UE_LOG(LogZombies, Warning, TEXT("Invalid faction: %d"), Faction);
-			}
-		}
-	}
-}
-
-#endif
 
 void AZPlayerController::LockpickRotate(const FInputActionValue& Value)
 {

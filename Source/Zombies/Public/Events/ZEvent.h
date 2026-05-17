@@ -265,6 +265,37 @@ struct ZOMBIES_API FZEventReaction_WarnAboutBreakingIn : public FZEventReaction
 };
 
 USTRUCT()
+struct ZOMBIES_API FZEventReaction_StartTimedEvent : public FZEventReaction
+{
+	GENERATED_BODY()
+	
+	virtual ~FZEventReaction_StartTimedEvent() override = default;
+	bool operator==(const FZEventReaction_StartTimedEvent& Other) const = default;
+	bool operator!=(const FZEventReaction_StartTimedEvent& Other) const = default;
+
+	virtual void Execute(const FZEventRow* EventRow, AZPlayerController* PC, AZNPCAIController* NPCAIController) const override;
+	virtual FString ToString() const override;
+	
+	FGameplayTag TimedEvent;
+	int32 DurationHours = 24;
+};
+
+USTRUCT()
+struct ZOMBIES_API FZEventReaction_SetCanTrade : public FZEventReaction
+{
+	GENERATED_BODY()
+	
+	virtual ~FZEventReaction_SetCanTrade() override = default;
+	bool operator==(const FZEventReaction_SetCanTrade& Other) const = default;
+	bool operator!=(const FZEventReaction_SetCanTrade& Other) const = default;
+
+	virtual void Execute(const FZEventRow* EventRow, AZPlayerController* PC, AZNPCAIController* NPCAIController) const override;
+	virtual FString ToString() const override;
+	
+	bool bCanTrade = true;
+};
+
+USTRUCT()
 struct ZOMBIES_API FZEventRow : public FTableRowBase
 {
 	GENERATED_BODY()
@@ -281,7 +312,7 @@ struct ZOMBIES_API FZEventRow : public FTableRowBase
 	FGameplayTagContainer RequiredEvents;
 
 	UPROPERTY(EditDefaultsOnly)
-	FGameplayTagContainer BlockedEvents;
+	FGameplayTagContainer BlockedByEvents;
 	
 	UPROPERTY(EditDefaultsOnly)
 	TArray<TInstancedStruct<FZEventReaction>> OnAvailable;

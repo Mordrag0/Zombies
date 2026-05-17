@@ -3,7 +3,6 @@
 
 #include "UI/ZDialogueRowWidget.h"
 #include "Events/ZEvent.h"
-#include "CommonTextBlock.h"
 #include "ZPlayerController.h"
 
 void UZDialogueRowWidget::Init(const FZDialogueOptionRow* InRow)

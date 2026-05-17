@@ -5,6 +5,7 @@
 #include "GenericTeamAgentInterface.h"
 #include "ZConstants.h"
 #include "ZTypes.h"
+#include "Runtime/Experimental/Voronoi/Private/voro++/src/container.hh"
 #include "UI/ZText.h"
 
 bool UZGameplayStatics::IsHourBetween(int32 Hour, int32 From, int32 To)
@@ -66,6 +67,67 @@ const FText& UZGameplayStatics::GetFactionText(EZFaction Faction)
 	case EZFaction::MAX:
 	default:
 		return ZText::Invalid;
+	}
+}
+
+bool UZGameplayStatics::HasAnyExact(const TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container)
+{
+	if (Container.IsEmpty())
+	{
+		return false;
+	}
+	for (const FGameplayTag Tag : Container)
+	{
+		if (Set.Contains(Tag))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UZGameplayStatics::HasAllExact(const TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container)
+{
+	if (Container.IsEmpty())
+	{
+		return true;
+	}
+	for (const FGameplayTag Tag : Container)
+	{
+		if (!Set.Contains(Tag))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+FGameplayTagContainer UZGameplayStatics::FilterExact(const TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container)
+{
+	FGameplayTagContainer Ret;
+	for (const FGameplayTag Tag : Container)
+	{
+		if (Set.Contains(Tag))
+		{
+			Ret.AddTag(Tag);
+		}
+	}
+	return Ret;
+}
+
+void UZGameplayStatics::RemoveAll(TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container)
+{
+	for (const FGameplayTag Tag : Container)
+	{
+		Set.Remove(Tag);
+	}
+}
+
+void UZGameplayStatics::Append(TSet<FGameplayTag>& Set, const FGameplayTagContainer& Container)
+{
+	for (const FGameplayTag Tag : Container)
+	{
+		Set.Add(Tag);
 	}
 }
 

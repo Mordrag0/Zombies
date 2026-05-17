@@ -286,11 +286,12 @@ void AZCharacter::Die(AController* DeathInstigator)
 	}
 	bDead = true;
 
+	SetMovementEnabled(false);
+	MoverComponentBP->SetGravityOverride(true, FVector::ZeroVector);
 	CapsuleComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	MeshComponent->SetCollisionResponseToChannel(ECC_Interactable, ECollisionResponse::ECR_Block); // #ZTODO belongs in AZZombieCharacter?
-	SetMovementEnabled(false);
 
-	if (HasAuthority())
+	if (ensure(HasAuthority()))
 	{
 		AZGameMode* GM = GetWorld()->GetAuthGameMode<AZGameMode>();
 		GM->OnCharacterKilled(this, DeathInstigator);
@@ -319,7 +320,6 @@ void AZCharacter::SetHealth(float InHealth, AController* DamageInstigator)
 	{
 		Die(DamageInstigator);
 	}
-	UE_LOG(LogZCharacter, Warning, TEXT("%s Health = %f"), *GetName(), Health);
 
 	MARK_PROPERTY_DIRTY_FROM_NAME(ThisClass, Health, this);
 }
@@ -759,6 +759,12 @@ void AZCharacter::ClearInteractionTarget(EZCharacterActivity Activity)
 bool AZCharacter::IsEndingActivity(EZCharacterActivity Activity) const
 {
 	return EnumHasAnyFlags(EndingActivities, Activity);
+}
+
+void AZCharacter::SetMovementEnabled(bool bEnabled)
+{
+	bMovementEnabled = bEnabled;
+	MoverComponentBP->SetActive(bEnabled);
 }
 
 void AZCharacter::Jump()

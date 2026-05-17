@@ -119,8 +119,6 @@ void UZSaveSubsystem::SaveGameState(UZSaveGame* Save)
 {
 	if (AZGameState* GS = GetWorld()->GetGameState<AZGameState>())
 	{
-		Save->CompletedEvents = GS->CompletedEvents;
-		Save->AvailableDialogueEvents = GS->AvailableEvents;
 		Save->CompletedQuests = GS->CompletedQuests;
 		Save->OpenedQuests = GS->OpenedQuests;
 		Save->FailedQuests = GS->FailedQuests;
@@ -133,8 +131,6 @@ void UZSaveSubsystem::LoadGameState(UZSaveGame* Save)
 {
 	if (AZGameState* GS = GetWorld()->GetGameState<AZGameState>())
 	{
-		GS->CompletedEvents = Save->CompletedEvents;
-		GS->AvailableEvents = Save->AvailableDialogueEvents;
 		GS->CompletedQuests = Save->CompletedQuests;
 		GS->OpenedQuests = Save->OpenedQuests;
 		GS->FailedQuests = Save->FailedQuests;

@@ -234,3 +234,13 @@ enum class EZMovementMode : uint8
 	Swimming,
 	Sliding,
 };
+
+UENUM(BlueprintType)
+enum class EZDirection : uint8
+{
+	None,
+	North,
+	East,
+	South,
+	West,
+};
